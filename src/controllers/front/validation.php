@@ -1,128 +1,236 @@
 <?php
-/*
-* 2007-2012 PrestaShop
-*
-* NOTICE OF LICENSE
-*
-* This source file is subject to the Academic Free License (AFL 3.0)
-* that is bundled with this package in the file LICENSE.txt.
-* It is also available through the world-wide-web at this URL:
-* http://opensource.org/licenses/afl-3.0.php
-* If you did not receive a copy of the license and are unable to
-* obtain it through the world-wide-web, please send an email
-* to license@prestashop.com so we can send you a copy immediately.
-*
-* DISCLAIMER
-*
-* Do not edit or add to this file if you wish to upgrade PrestaShop to newer
-* versions in the future. If you wish to customize PrestaShop for your
-* needs please refer to http://www.prestashop.com for more information.
-*
-*  @author PrestaShop SA <contact@prestashop.com>
-*  @copyright  2007-2012 PrestaShop SA
-*  @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
-*  International Registered Trademark & Property of PrestaShop SA
-*/
-
 /**
  * @since 1.5.0
  */
 class PagofacilValidationModuleFrontController extends ModuleFrontController
 {
-	public function postProcess()
-	{
-		$cart = $this->context->cart;
+    public function postProcess()
+    {
+        $cart = $this->context->cart;
 
-		if ($cart->id_customer == 0 || $cart->id_address_delivery == 0 || $cart->id_address_invoice == 0 || !$this->module->active)
-			Tools::redirect('index.php?controller=order&step=1');
+        if ($cart->id_customer == 0
+            || $cart->id_address_delivery == 0
+            || $cart->id_address_invoice == 0
+            || !$this->module->active
+        ) {
+            Tools::redirect('index.php?controller=order&step=1');
+        }
 
-		// Check that this payment option is still available in case the customer changed his address just before the end of the checkout process
-		$authorized = false;
-		foreach (Module::getPaymentModules() as $module)
-			if ($module['name'] == 'pagofacil')
-			{
-				$authorized = true;
-				break;
-			}
+        // Check that this payment option is still available in case the customer changed his address just before the end of the checkout process
+        $authorized = false;
+        foreach (Module::getPaymentModules() as $module)
+        {
+            if ($module['name'] == 'pagofacil')
+            {
+                $authorized = true;
+                break;
+            }
+        }
+        if (!$authorized)
+        {
+            die($this->module->l(
+                'Este m&eacute;todo de pago no est&acute; disponible.'
+                , 'validation'
+            ));
+        }
 
-		if (!$authorized)
-			die($this->module->l('Este método de pago no está disponible.', 'validation'));
+        $customer = new Customer($cart->id_customer);
+        if (!Validate::isLoadedObject($customer))
+        {
+            Tools::redirect('index.php?controller=order&step=1');
+        }
 
-		$customer = new Customer($cart->id_customer);
+        // validacion        
+        $arreglo_errores = array();
+        $arreglo_validacion = array(
+            'nombre' => array(
+                'message' => 'Debe capturar el nombre'
+            )
+            ,'apellidos' => array(
+                'message' => 'Debe capturar los apellidos'
+            )
+            ,'numeroTarjeta' => array(
+                'message' => 'Debe capturar el n&uacute;mero de tarjeta'
+            )
+            ,'cvt' => array(
+                'message' => 'Debe capturar el cvt'
+            )
+            ,'cp' => array(
+                'message' => 'Debe capturar el cp'
+            )
+            ,'mesExpiracion' => array(
+                'message' => 'Debe seleccionar el mes de expiraci&oacute;n'
+            )
+            ,'anyoExpiracion' => array(
+                'message' => 'Debe seleccionar el a&ntilde;o de expiraci&oacute;n'
+            )
+            ,'email' => array(
+                'message' => 'Debe capturar el email'
+            )
+            ,'telefono' => array(
+                'message' => 'Debe capturar el tel&eacute;fono'
+            )
+            ,'celular' => array(
+                'message' => 'Debe capturar el celular'
+            )
+            ,'calleyNumero' => array(
+                'message' => 'Debe capturar la calle y n&uacute;mero'
+            )
+            ,'colonia' => array(
+                'message' => 'Debe capturar la colonia'
+            )
+            ,'municipio' => array(
+                'message' => 'Debe capturar el municipio'
+            )
+            ,'estado' => array(
+                'message' => 'Debe capturar el estado'
+            )
+            ,'pais' => array(
+                'message' => 'Debe capturar el pais'
+            )
+        );
+        foreach ($arreglo_validacion as $key => $item)
+        {
+            if (trim(Tools::getValue($key)) == '')
+            {
+                array_push($arreglo_errores, $item['message']);
+            }
+        }
+        if (count($arreglo_errores) > 0) {
+            session_start();
+            $_SESSION['errores'] = $arreglo_errores;
+            Tools::redirect($this->context->link->getModuleLink('pagofacil', 'payment'));
+        }
 
-		if (!Validate::isLoadedObject($customer))
-			Tools::redirect('index.php?controller=order&step=1');
+        $currency = $this->context->currency;
+        $total = (float) $cart->getOrderTotal(true, Cart::BOTH);
 
-		$currency = $this->context->currency;
-		$total = (float)$cart->getOrderTotal(true, Cart::BOTH);
+        //Realizar el pago con pagofacil
+        $data = array(
+            'idServicio' => urlencode('3')
+            , 'idSucursal' => urlencode(Configuration::get('PF_API_BRANCH'))
+            , 'idUsuario' => urlencode(Configuration::get('PF_API_USER'))
+            , 'nombre' => urlencode(Tools::getValue('nombre'))
+            , 'apellidos' => urlencode(Tools::getValue('apellidos'))
+            , 'numeroTarjeta' => urlencode(Tools::getValue('numeroTarjeta'))
+            , 'cvt' => urlencode(Tools::getValue('cvt'))
+            , 'cp' => urlencode(Tools::getValue('cp'))
+            , 'mesExpiracion' => urlencode(Tools::getValue('mesExpiracion'))
+            , 'anyoExpiracion' => urlencode(Tools::getValue('anyoExpiracion'))
+            , 'monto' => urlencode($total)
+            , 'email' => urlencode(Tools::getValue('email'))
+            , 'telefono' => urlencode(Tools::getValue('telefono'))
+            , 'celular' => urlencode(Tools::getValue('celular'))
+            , 'calleyNumero' => urlencode(Tools::getValue('calleyNumero'))
+            , 'colonia' => urlencode(Tools::getValue('colonia'))
+            , 'municipio' => urlencode(Tools::getValue('municipio'))
+            , 'estado' => urlencode(Tools::getValue('estado'))
+            , 'pais' => urlencode(Tools::getValue('pais'))
+            , 'idPedido' => urlencode($cart->id)
+            , 'ip' => urlencode(Tools::getRemoteAddr())
+            , 'httpUserAgent' => urlencode($_SERVER['HTTP_USER_AGENT'])
+        );
+        if (Configuration::get('PF_NO_MAIL') == '1')
+        {
+            $data = array_merge($data, array('noMail' => 1));
+        }
+        if (Configuration::get('PF_EXCHANGE') != 'MXN')
+        {
+            $data = array_merge($data, array('divisa' => Configuration::get('PF_EXCHANGE')));
+        }
+        if (Configuration::get('PF_INSTALLMENTS') == '1')
+        {
+            if (Tools::getValue('msi') != '' && Tools::getValue('msi') != '00')
+            {
+                $data = array_merge(
+                    $data
+                    ,array('plan' => 'MSI', 'mensualidades' => Tools::getValue('msi'))
+                );
+            }
+        }
 
-		//Realizar el pago con pagofacil
-		$json_to_send = array();
-		$json_to_send['jsonrpc'] = '2.0';
-		$json_to_send['method'] = 'transaccion';
-		$json_to_send['id'] = $cart->id;
-		$json_to_send['params'] = array('data' => array());
+        // construccion de la peticion
+        $url = 'https://www.pagofacil.net/st/public/Wsrtransaccion/index/format/json';
+        if (Configuration::get('PF_ENVIRONMENT') == '2') {
+            $url = 'https://www.pagofacil.net/ws/public/Wsrtransaccion/index/format/json';
+        }
+        $url .= '/?method=transaccion';
+        foreach ($data as $key => $valor) {
+            $url .= "&data[$key]=$valor";
+        }
+        //die($this->module->l($url, 'validation'));
+        // consumo del servicio
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        // Blindly accept the certificate
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        
+        // tratamiento de la respuesta del servicio
+        if (($json = json_decode($response, true)) === NULL)
+        {
+            session_start();
+            $_SESSION['errores'] = array(
+                $response == NULL
+                ? 'Sin respuesta del servicio'
+                : 'Respuesta del servicio: '.$response
+            );
+            Tools::redirect($this->context->link->getModuleLink('pagofacil', 'payment'));
+        }
+        if (!isset($json['WebServices_Transacciones']['transaccion']))
+        {
+            session_start();
+            $_SESSION['errores'] = array(
+                'No existe WebServices_Transacciones - transaccion'
+                ,'Respuesta del servicio: '.$response
+            );
+            Tools::redirect($this->context->link->getModuleLink('pagofacil', 'payment'));
+        }
+        
+        $transaction = $json['WebServices_Transacciones']['transaccion'];        
+        if (isset($transaction['autorizado']) && $transaction['autorizado'] == '1')
+        {
+            try
+            {
+                $this->module->validateOrder(
+                    (int)$cart->id, 2, $total, $this->module->displayName,
+                    NULL, array(), (int) $currency->id, false, $customer->secure_key
+                );
 
-		$json_to_send['params']['data']['nombre'] = $_POST['nombre'];
-		$json_to_send['params']['data']['apellidos'] = $_POST['apellidos'];
-		$json_to_send['params']['data']['numeroTarjeta'] = $_POST['numeroTarjeta'];
-		$json_to_send['params']['data']['mesExpiracion'] = $_POST['mesExpiracion'];
-		$json_to_send['params']['data']['anyoExpiracion'] = $_POST['anyoExpiracion'];
-		$json_to_send['params']['data']['cvt'] = $_POST['cvt'];
-		$json_to_send['params']['data']['cp'] = $_POST['cp'];
-		$json_to_send['params']['data']['email'] = $_POST['email'];
-		$json_to_send['params']['data']['telefono'] = $_POST['telefono'];
-		$json_to_send['params']['data']['celular'] = $_POST['celular'];
-		$json_to_send['params']['data']['calleyNumero'] = $_POST['calleyNumero'];
-		$json_to_send['params']['data']['colonia'] = $_POST['colonia'];
-		$json_to_send['params']['data']['municipio'] = $_POST['municipio'];
-		$json_to_send['params']['data']['estado'] = $_POST['estado'];
-		$json_to_send['params']['data']['pais'] = $_POST['pais'];
-		$json_to_send['params']['data']['monto'] = $total;
-		$json_to_send['params']['data']['idSucursal'] = $_POST['idSucursal'];
-		$json_to_send['params']['data']['idUsuario'] = $_POST['idUsuario'];
-		$json_to_send['params']['data']['idServicio'] = $_POST['idServicio'];
-		
-		$url_to_send = "https://www.pagofacil.net/ws/public/Wsjtransaccion/";
-		$json_to_send = json_encode($json_to_send);
-
-		$ch = curl_init($url_to_send);
-		curl_setopt($_h, CURLOPT_DNS_USE_GLOBAL_CACHE, false ); 
-		curl_setopt($_h, CURLOPT_DNS_CACHE_TIMEOUT, 2 );                                                                      
-		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");                                                                     
-		curl_setopt($ch, CURLOPT_POSTFIELDS, $json_to_send);                                                                  
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);                                                                  
-		curl_setopt($ch, CURLOPT_HTTPHEADER, array(                                                                          
-		    'Content-Type: application/json',                                                                                
-		    'Content-Length: ' . strlen($json_to_send))                                                                       
-		);
-		$result = curl_exec($ch);
-		curl_close($ch);
-		$result = json_decode($result,TRUE);
-
-		//validar pagofacil
-		if($result['result']['autorizado'] == 1){
-			$this->module->validateOrder((int)$cart->id, 14, $total, $this->module->displayName, NULL, $mailVars, (int)$currency->id, false, $customer->secure_key);
-			Tools::redirect('index.php?controller=order-confirmation&id_cart='.(int)$cart->id.'&id_module='.(int)$this->module->id.'&id_order='.$this->module->currentOrder.'&key='.$customer->secure_key);
-		} else {
-			$arreglo_errores = array();
-			$res_error = "\n\n".date("r")."\n";	
-			$res_error .= "Texto: ".$result['result']['texto']."\n";
-			if(is_array($result['result']['error'])){
-				foreach ($result['result']['error'] as $key => $value) {
-					$arreglo_errores[$key] = $value;
-					$res_error .= "{$key}: {$value}\n";
-				}
-			} else {
-				$res_error .= "Error: ".$result['result']['error'];	
-			}
-			
-			file_put_contents($_SERVER['DOCUMENT_ROOT'].'/modules/pagofacil/log.txt', $res_error, FILE_APPEND);
-			session_start();
-			$_SESSION['errores'] = $arreglo_errores;
-			header("Location: /module/pagofacil/payment");
-			//$this->setTemplate('error.tpl');
-			//echo "Ocurrió un error al procesar su pago, por favor contacte al sitio";
-		}
-	}
+                Tools::redirect(
+                    'index.php?controller=order-confirmation&id_cart='
+                    . (int) $cart->id . '&id_module=' . (int) $this->module->id
+                    . '&id_order=' . $this->module->currentOrder . '&key='
+                    . $customer->secure_key
+                );
+            }
+            catch (Exception $error)
+            {
+                session_start();
+                $_SESSION['errores'] = array($error->getMessage());
+                Tools::redirect($this->context->link->getModuleLink('pagofacil', 'payment'));
+            }
+        }
+        else
+        {
+            $arreglo_errores = array();
+            if (is_array($transaction['error']))
+            {
+                foreach ($transaction['error'] as $key => $value)
+                {
+                    $arreglo_errores[$key] = $value;
+                }
+            }
+            else
+            {
+                $arreglo_errores[] = $transaction['texto'];
+            }
+            session_start();
+            $_SESSION['errores'] = $arreglo_errores;
+            Tools::redirect($this->context->link->getModuleLink('pagofacil', 'payment'));
+        }
+    }
+    
 }
