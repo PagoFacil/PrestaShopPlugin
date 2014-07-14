@@ -1,6 +1,8 @@
 PrestaShopPlugin
 ================
 
+This plugin adds [PagoFácil](http://www.pagofacil.net) as a payment gateway for [PrestaShop](http://www.prestashop.com/) based e-commerce sites.
+
 Public Release 1.0
 
 Tested on PrestaShop 1.5.* and 1.6
