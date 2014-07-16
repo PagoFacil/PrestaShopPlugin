@@ -58,7 +58,9 @@ class PagofacilPaymentModuleFrontController extends ModuleFrontController
             ,'monto' => $cart->getOrderTotal(true, Cart::BOTH)            
             ,'email' => $client->email
             ,'telefono' => $invoice_address->phone
+			,'celular' => $invoice_address->phone_mobile
             ,'calleyNumero' => $invoice_address->address1
+			,'colonia' => ''
             ,'municipio' => $invoice_address->city
             ,'estado' => $state->name
             ,'pais' => $invoice_address->country

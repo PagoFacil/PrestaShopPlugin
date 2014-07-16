@@ -40,57 +40,64 @@
     }
 </style>
 <form name="formularioPago" method="POST" action="{$link->getModuleLink('pagofacil', 'validation', [], true)|escape:'html'}">
-    <div class="info">
-        <p>
-            {l s='Escogi&oacute pagar con PagoF&aacute;cil.' mod='pagofacil'}
-            - {l s='El total de su orden es:' mod='pagofacil'}
-            <span id="amount" class="price">{displayPrice price=$monto}</span>
-            <strong>Por Favor revise sus datos y complete el formulario.</strong>
-            Para realizar su pago por medio de PagoF&aacute;cil haga click en el bot&oacute;n comprar
-        </p>
+	<div class="info">        
+		Escogi&oacute; pagar con PagoF&aacute;cil<br/>
+		El total de su orden es:<span id="amount" class="price">{displayPrice price=$monto}</span><br/>
+		<strong>Por Favor revise sus datos y complete el formulario.</strong><br/>
+		Para realizar su pago por medio de PagoF&aacute;cil haga click en el bot&oacute;n comprar        
     </div>
             
     {if count($errores) > 0}
-    <div class="error">
+    <div class="error"  style="padding-top:5px;">
         {foreach from=$errores item=error}
             <strong>{$error}</strong><br/>
         {/foreach}
     </div>
     {/if}
 
-    <ul class="pay-form">
-        <li>
-            <label for="input-numeroTarjeta">N&uacute;mero de Tarjeta:</label>
-            <input id="input-numeroTarjeta" type="text" name="numeroTarjeta" autocomplete="off" class="medium">
-        </li>
-        <li>            
-            <label for="select-mesExpiracion">Expiraci&oacute;n:</label>
-            <select name="mesExpiracion" id="select-mesExpiracion" class="small">
-                <option value="" selected="selected">Mes de expiraci&oacute;n:</option>
-                {foreach from=$meses item=mes}
-                    <option value="{$mes}">{$mes}</option>
-                {/foreach}
-            </select>                        
-            <select name="anyoExpiracion" id="select-anyoExpiracion" class="small">
-                <option value="" selected="selected">A&ntilde;o de expiraci&oacute;n:</option>
-                {foreach from=$anyos item=anyo}
-                    <option value="{$anyo}">{$anyo}</option>
-                {/foreach}
-            </select>	
-        </li>
-        <li>
-            <label for="input-cvt" class="required">C&oacute;digo Cvv2:</label>
-            <input id="input-cvt" type="password" name="cvt" autocomplete="off" class="small" maxlength="4" />
-        </li>
-        <li>
-            <label for="input-nombre">Nombre(s):</label>
-            <input id="input-nombre" type="text" name="nombre" value="{$nombre}" autocomplete="off" class="large">
-        </li>
-        <li>
-            <label for="input-apellidos">Apellidos:</label>
-            <input id="input-apellidos" type="text" name="apellidos" value="{$apellidos}" autocomplete="off" class="large">
-        </li>
-        
+
+	<div style="text-align:center; font-size:18px; font-weight:bold; padding-top:10px; padding-bottom:5px;">
+		Datos de la tarjeta
+	</div>
+	<ul class="pay-form">
+		<li>
+			<label for="input-numeroTarjeta">N&uacute;mero de Tarjeta:</label>
+			<input id="input-numeroTarjeta" type="text" name="numeroTarjeta" autocomplete="off" class="medium">
+		</li>
+		<li>            
+			<label for="select-mesExpiracion">Expiraci&oacute;n:</label>
+			<select name="mesExpiracion" id="select-mesExpiracion" class="small">
+				<option value="" selected="selected">Mes de expiraci&oacute;n:</option>
+				{foreach from=$meses item=mes}
+					<option value="{$mes}">{$mes}</option>
+				{/foreach}
+			</select>                        
+			<select name="anyoExpiracion" id="select-anyoExpiracion" class="small">
+				<option value="" selected="selected">A&ntilde;o de expiraci&oacute;n:</option>
+				{foreach from=$anyos item=anyo}
+					<option value="{$anyo}">{$anyo}</option>
+				{/foreach}
+			</select>	
+		</li>
+		<li>
+			<label for="input-cvt" class="required">C&oacute;digo Seguridad (cvv):</label>
+			<input id="input-cvt" type="password" name="cvt" autocomplete="off" class="small" maxlength="4" />
+		</li>
+		<li>
+			<label for="input-nombre">Nombre(s):</label>
+			<input id="input-nombre" type="text" name="nombre" value="{$nombre}" autocomplete="off" class="large">
+		</li>
+		<li>
+			<label for="input-apellidos">Apellidos:</label>
+			<input id="input-apellidos" type="text" name="apellidos" value="{$apellidos}" autocomplete="off" class="large">
+		</li>
+	</ul>
+		
+	
+	<div style="text-align:center; font-size:18px; font-weight:bold; padding-top:10px; padding-bottom:5px;">
+		Datos del comprador
+	</div>
+	<ul class="pay-form">
         <li>
             <label for="input-cp">C&oacute;digo Postal:</label>
             <input id="input-cp" type="text" name="cp" value="{$cp}" autocomplete="off" class="small">

@@ -12,12 +12,13 @@ class Pagofacil extends PaymentModule
         $this->tab = 'payments_gateways';
         $this->version = $ver;
         $this->author = $by;
+        $this->need_instance = 1;
 
         parent::__construct();
 
-        $this->displayName = $this->l('PagoFácil');
-        $this->description = $this->l('Módulo para aceptar pago con Visa, Mastercard y AMEX');
-        $this->confirmUninstall = $this->l('¿Está seguro que desea borrar el módulo?');
+        $this->displayName = $this->l('PagoFacil');
+        $this->description = $this->l('Modulo para aceptar pago con Visa, Mastercard y AMEX');
+        $this->confirmUninstall = $this->l('�Esta seguro que desea borrar el modulo?');
     }
 
     public function install()
@@ -87,10 +88,10 @@ class Pagofacil extends PaymentModule
             }
         }
         
-        return $output.$this->displayForm();
+        return $output.$this->renderForm();
     }
     
-    public function displayForm()
+    public function renderForm()
     {
         $fields_form[0]['form'] = array(
             'legend' => array(
@@ -230,5 +231,7 @@ class Pagofacil extends PaymentModule
         
         return $helper->generateForm($fields_form);
     }
+    
+    
     
 }
