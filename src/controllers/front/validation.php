@@ -76,9 +76,9 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             ,'calleyNumero' => array(
                 'message' => 'Debe capturar la calle y n&uacute;mero'
             )
-            ,'colonia' => array(
-                'message' => 'Debe capturar la colonia'
-            )
+            //,'colonia' => array(
+            //    'message' => 'Debe capturar la colonia'
+            //)
             ,'municipio' => array(
                 'message' => 'Debe capturar el municipio'
             )
@@ -122,7 +122,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             , 'telefono' => urlencode(Tools::getValue('telefono'))
             , 'celular' => urlencode(Tools::getValue('celular'))
             , 'calleyNumero' => urlencode(Tools::getValue('calleyNumero'))
-            , 'colonia' => urlencode(Tools::getValue('colonia'))
+            , 'colonia' => urlencode( ( trim(Tools::getValue('colonia')) == '' ? 'S/D' : trim(Tools::getValue('colonia')) ) )
             , 'municipio' => urlencode(Tools::getValue('municipio'))
             , 'estado' => urlencode(Tools::getValue('estado'))
             , 'pais' => urlencode(Tools::getValue('pais'))
