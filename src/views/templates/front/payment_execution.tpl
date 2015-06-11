@@ -142,6 +142,8 @@
                     <optgroup label="MasterCard/Visa"></optgroup>
                     <option value="03">3 Meses</option>
                     <option value="06">6 Meses</option>
+					<option value="09">9 Meses</option>
+                    <option value="12">12 Meses</option>
                     <optgroup label="American Express"></optgroup>
                     <option value="03">3 Meses</option>
                     <option value="06">6 Meses</option>
