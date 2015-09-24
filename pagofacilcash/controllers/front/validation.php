@@ -123,13 +123,23 @@ class PagofacilcashValidationModuleFrontController extends ModuleFrontController
                     (int)$cart->id, 1, $total, $this->module->displayName,
                     NULL, array(), (int) $currency->id, false, $customer->secure_key
                 );
+                
+                
+                session_start();
+                $_SESSION['transaction'] = $json;
+                
+                Tools::redirect( $this->context->link->getModuleLink('pagofacilcash', 'confirm') );
 
-                Tools::redirect(
+                /*Tools::redirect(
+	                
+	                
+	                
+	                
                     'index.php?controller=order-confirmation&id_cart='
                     . (int) $cart->id . '&id_module=' . (int) $this->module->id
                     . '&id_order=' . $this->module->currentOrder . '&key='
                     . $customer->secure_key
-                );
+                );*/
             }
             catch (Exception $error)
             {
