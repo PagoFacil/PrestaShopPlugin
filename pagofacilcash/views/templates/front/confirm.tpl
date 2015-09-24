@@ -157,7 +157,7 @@
 {include file="$tpl_dir./order-steps.tpl"}
 
 <div class="page-title">
-    <h3>¡Felicitaciones! Su pedido ha sido generado correctamente.</h3>
+    <h3>¡Felicitaciones! Su pedido ha sido generado correctamente, verifica la orden de pago en tu e-mail. </h3>
 </div>
 
 
