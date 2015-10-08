@@ -23,7 +23,7 @@ class PagofacilcashConfirmModuleFrontController extends ModuleFrontController
         
         session_start();
         
-        $url = '/index.php?controller=order-confirmation&id_cart='
+        $url = _PS_BASE_URL_.__PS_BASE_URI__ . '/index.php?controller=order-confirmation&id_cart='
                     . (int) $cart->id . '&id_module=' . (int) $this->module->id
                     . '&id_order=' . $this->module->currentOrder . '&key='
                     . $customer->secure_key;
