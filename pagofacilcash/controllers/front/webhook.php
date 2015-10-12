@@ -46,7 +46,7 @@ class PagofacilcashWebhookModuleFrontController extends ModuleFrontController
 			return 'NO STATUS';
 		}
 		
-		$amount = Tools::getValue('status');
+		$amount = Tools::getValue('amount');
 		
 		
 		if (empty($amount) ){
