@@ -37,20 +37,23 @@ class PagofacilcashPaymentModuleFrontController extends ModuleFrontController
         
         
         
-        $ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL, "http://api.compropago.com/v1/providers/true");
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_USERPWD, "pk_live_508992456a45414a9");
-		curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-		$output = curl_exec($ch);
-		curl_close($ch);
-		
-		$tmp_store_codes = json_decode($output);
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, "https://pagofacil.net/ws/public/index.php/cash/Rest_Conveniencestores");
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	$output = curl_exec($ch);
+	$info = curl_getinfo($ch);
+	curl_close($ch);
+	$response = json_decode($output);
+	if ($info['http_code'] != 200 || !is_object($response) || !property_exists($response, 'records')) {
+		$store_codes_list = array();
+	} else {
+		$store_codes_list = $response->records;
+	}
 		
 		$store_codes = array();
 		
-		foreach($tmp_store_codes as $store ){
-			$store_codes[$store->internal_name] = $store->name;
+		foreach($store_codes_list as $store ){
+			$store_codes[$store->code] = $store->name;
 		}
 
         
