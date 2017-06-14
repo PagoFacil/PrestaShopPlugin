@@ -87,7 +87,7 @@ class PagofacilcashValidationModuleFrontController extends ModuleFrontController
         // construccion de la peticion
         $url = 'https://www.pagofacil.net/ws/public/cash/charge';
         if ( Configuration::get('PFC_ENVIRONMENT') == 1 ) {
-            $url = 'https://www.pagofacil.net/st/public/cash/charge';
+            $url = 'https://api.pagofacil.net/cash/charge';
         }
 
         $ch = curl_init();
