@@ -150,7 +150,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         }
 
         // construccion de la peticion
-        $url = 'https://api.pagofacil.net/Wsrtransaccion/index/format/json';
+        $url = 'https://stapi.pagofacil.net/Wsrtransaccion/index/format/json';
         if (Configuration::get('PF_ENVIRONMENT') == '2') {
             $url = 'https://www.pagofacil.net/ws/public/Wsrtransaccion/index/format/json';
         }
