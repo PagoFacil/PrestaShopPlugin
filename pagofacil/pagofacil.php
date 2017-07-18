@@ -1,30 +1,44 @@
 <?php
-if (!defined('_PS_VERSION_'))
-	exit;
+
+if (!defined('_PS_VERSION_')) {
+    exit;
+}
+
+use PrestaShop\PrestaShop\Core\Payment\PaymentOption;
 
 class Pagofacil extends PaymentModule
 {
     public function __construct()
     {
-        $ver = '1.0';
-        $by = 'PagoF&aacute;cil / DreasmEngineering';
         $this->name = 'pagofacil';
         $this->tab = 'payments_gateways';
-        $this->version = $ver;
-        $this->author = $by;
+        $this->version = '2.0';
+        $this->author = 'PagoFácil';
         $this->need_instance = 1;
+        $this->ps_versions_compliancy = [
+            'min' => '1.7',
+            'max' => _PS_VERSION_
+        ];
+        $this->controllers = ['validation'];
+        $this->bootstrap = true;
 
         parent::__construct();
 
-        $this->displayName = $this->l('PagoFacil');
-        $this->description = $this->l('Modulo para aceptar pago con Visa, Mastercard y AMEX');
-        $this->confirmUninstall = $this->l('�Esta seguro que desea borrar el modulo?');
+        $this->displayName = $this->l('PagoFácil');
+        $this->description = $this->l(
+            'Éste módulo te permite aceptar pagos con Visa, Mastercard y AMEX'
+        );
+        $this->confirmUninstall = $this->l(
+            '¿Estás seguro que desea desinstalar el módulo?'
+        );
     }
 
     public function install()
     {
-        if (!parent::install() || !$this->registerHook('payment'))
-        {
+        if (!parent::install() 
+            || !$this->registerHook('paymentOptions')
+            || !$this->registerHook('paymentReturn')
+        ) {
             return false;
         }
         return true;
@@ -45,193 +59,285 @@ class Pagofacil extends PaymentModule
         return true;
     }
 
-    public function hookPayment($params)
+    public function hookPaymentOptions($params)
     {
-        if (!$this->active)
-        {
+        if (!$this->active) {
+            return;
+        }
+
+        $option = new PaymentOption();
+        $option->setCallToActionText($this->l('Pagar con PagoFácil'))
+            ->setForm($this->generateForm($params))
+            ->setAdditionalInformation(
+                $this->fetch('module:pagofacil/views/templates/front/payment_infos.tpl')
+            );
+
+        return [$option];
+    }
+
+    protected function generateForm($params)
+    {
+        $cart = $params['cart'];
+        $customer = $params['cookie'];
+        $invoiceAddress = new Address($cart->id_address_invoice);
+        $state = new State($invoiceAddress->id_state);
+
+        $this->context->smarty->assign([
+            'meses' => $this->getMonths(),
+            'anios' => $this->getYears(),
+            'nbProducts' => $cart->nbProducts(),
+            'monto' => $cart->getOrderTotal(true, Cart::BOTH),
+            'total' => Tools::displayPrice(
+                $cart->getOrderTotal(true, Cart::BOTH),
+                new Currency($params['cart']->id_currency),
+                false
+            ),
+            'currency' => $this->getCurrency($cart->id_currency)[0],
+            'nombre' => $customer->customer_firstname,
+            'apellidos' => $customer->customer_lastname,
+            'cp' => $invoiceAddress->postcode,
+            'email' => $customer->email,
+            'telefono' => $invoiceAddress->phone,
+            'celular' => $invoiceAddress->phone_mobile,
+            'calleyNumero' => $invoiceAddress->address1,
+            'colonia' => '',
+            'municipio' => $invoiceAddress->city,
+            'estado' => $state->name,
+            'pais' => $invoiceAddress->country,
+            'errors' => $this->getErrorsValidation(),
+            'installments' => (boolean) Configuration::get('PF_INSTALLMENTS'),
+            'action' => $this->context->link->getModuleLink($this->name, 'validation', array(), true)
+        ]);
+
+        return $this->context->smarty->fetch('module:pagofacil/views/templates/front/payment_form.tpl');
+    }
+
+    private function getErrorsValidation()
+    {
+        $errors = [];
+        if ( array_key_exists('errors', $_SESSION) && is_array($_SESSION['errors'])) {
+            foreach ($_SESSION['errors'] as $k => $v) {
+                $errors[$k] = $v;
+            }
+            unset($_SESSION['errors']);
+        }
+        session_destroy();
+        return $errors;
+    }
+
+    private function getYears()
+    {
+        $years = [];
+        $currentYear = date('Y', time());
+        for ($i = 0; $i < 6; $i++) {
+            $years[] = substr($currentYear + $i, -2);
+        }
+        return $years;
+    }
+
+    private function getMonths()
+    {
+        $months = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $months[] = sprintf("%02s", $i);
+        }
+        return $months;
+    }
+
+    public function hookPaymentReturn($params)
+    {
+        if (!$this->active) {
             return;
         }
 
         $this->smarty->assign(array(
-            'this_path'     => $this->_path,
-            'this_path_ssl' => Tools::getShopDomainSsl(true, true).__PS_BASE_URI__.'modules/'.$this->name.'/'
-         ));
-        return $this->display(__FILE__, 'payment.tpl');
+            'total' => Tools::displayPrice(
+                $params['order']->getOrdersTotalPaid(),
+                new Currency($params['order']->id_currency),
+                false
+            ),
+            'shop_name' => $this->context->shop->name,
+            'id_order' => $params['order']->reference,
+            'payment' => $params['order']->payment,
+            'transaction' => Tools::getValue('transaction'),
+            'no_authorization' => Tools::getValue('no_authorization'),
+            'description' => Tools::getValue('description'),
+            'message' => Tools::getValue('message'),
+            'status' => Tools::getValue('status')
+        ));
+
+        return $this->fetch('module:pagofacil/views/templates/front/payment_return.tpl');
     }
     
     public function getContent()
     {
         $output = null;
         
-        if(Tools::isSubmit('submit'.$this->name)) {
-            $pf_api_user     = strval(Tools::getValue('PF_API_USER'));
-            $pf_api_branch   = strval(Tools::getValue('PF_API_BRANCH'));
-            $pf_env          = strval(Tools::getValue('PF_ENVIRONMENT'));
-            $pf_no_mail      = strval(Tools::getValue('PF_NO_MAIL'));
-            $pf_exchange     = strval(Tools::getValue('PF_EXCHANGE'));
-            $pf_installments = strval(Tools::getValue('PF_INSTALLMENTS'));
-            
-            //validate both apis TODO
-            if(false)
-            {
-            
-            }
-            else
-            {
-                Configuration::updateValue('PF_API_USER',    $pf_api_user);
-                Configuration::updateValue('PF_API_BRANCH',  $pf_api_branch);
-                Configuration::updateValue('PF_ENVIRONMENT', $pf_env);
-                Configuration::updateValue('PF_NO_MAIL',     $pf_no_mail);
-                Configuration::updateValue('PF_EXCHANGE',    $pf_exchange);
-                Configuration::updateValue('PF_INSTALLMENTS',$pf_installments);
-                $output = "Values Saved -" . $pf_env . "-";
-            }
+        if (Tools::isSubmit('submit'.$this->name)) {
+            $this->updateValuesPagoFacil();
+            $output .= $this->displayConfirmation(
+                $this->l('Settings Updated')
+            );
         }
-        
-        return $output.$this->renderForm();
+
+        return $output . $this->displayForm();
     }
-    
-    public function renderForm()
+
+    protected function displayForm()
     {
-        $fields_form[0]['form'] = array(
-            'legend' => array(
-                'title' => 'PagoF&aacute;cil configuration settings',
-            ),
-            'input' => array(
-                array(
-                    'type' => 'text'
-                    ,'label' => 'API Key Usuario'
-                    ,'name' => 'PF_API_USER'
-                    ,'size' => 60
-                    ,'required' => true
-                ),
-                array(
-                    'type' => 'text'
-                    ,'label' => 'API Key Sucursal'
-                    ,'name' => 'PF_API_BRANCH'
-                    ,'size' => 60
-                    ,'required' => true
-                ),
-                array(
-                    'type' => 'select'
-                    ,'label' => 'Environment'
-                    ,'name' => 'PF_ENVIRONMENT'
-                    ,'desc' => 'Select between Test/Production environments'
-                    ,'required' => true
-                    ,'options' => array(
-                        'query' => array(
-                            array(
-                                'id_option' => 1
-                                ,'name' => 'Staging/Tests (NON Production)'
-                            )
-                            ,array(
-                                'id_option' => 2
-                                ,'name' => 'Production'
-                            )
-                        )
-                        ,'id' => 'id_option'
-                        ,'name' => 'name'
-                    )
-                )
-                ,array(
-                    'type' => 'select'
-                    ,'label' => 'Send Notification'
-                    ,'name' => 'PF_NO_MAIL'
-                    ,'desc' => 'Allow PagoF&aacute;cil send notification to customer'
-                    ,'options' => array(
-                        'query' => array(
-                            array(
-                                'id_option' => 0
-                                ,'name' => 'SI'
-                            )
-                            ,array(
-                                'id_option' => 1
-                                ,'name' => 'NO'
-                            )
-                        )
-                        ,'id' => 'id_option'
-                        ,'name' => 'name'
-                    )
-                )
-                ,array(
-                    'type' => 'select'
-                    ,'label' => 'Currency Exchange'
-                    ,'name' => 'PF_EXCHANGE'
-                    ,'options' => array(
-                        'query' => array(
-                            array(
-                                'id_option' => 'MXN'
-                                ,'name' => 'Mexico (MXN)'
-                            )
-                            ,array(
-                                'id_option' => 'USD'
-                                ,'name' => 'United States of America (USD)'
-                            )
-                        )
-                        ,'id' => 'id_option'
-                        ,'name' => 'name'
-                    )
-                )
-                ,array(
-                    'type' => 'select'
-                    ,'label' => 'Enabled Installments'
-                    ,'name' => 'PF_INSTALLMENTS'
-                    ,'options' => array(
-                        'query' => array(
-                            array(
-                                'id_option' => 0
-                                ,'name' => 'NO'
-                            )
-                            ,array(
-                                'id_option' => 1
-                                ,'name' => 'SI'
-                            )
-                        )
-                        ,'id' => 'id_option'
-                        ,'name' => 'name'
-                    )
-                )
-            )
-            ,'submit' => array(
-                'title' => 'Save Changes'
-                ,'class' => 'button'
-            )
-        );
-        
+        // Default Language
+        $defaultLang = (int) Configuration::get('PS_LANG_DEFAULT');
+
+        // Inint Form Fields
+        $fieldsForm[0]['form'] = $this->getFieldsFormConfig();
+
         $helper = new HelperForm();
+        // Module, Token and CurrentIndex
         $helper->module = $this;
         $helper->name_controller = $this->name;
         $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = AdminController::$currentIndex.'&configure='.$this->name;
-          
-        // Title and toolbar
+        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+
+        // Language
+        $helper->default_form_language = $defaultLang;
+        $helper->allow_employee_form_lang = $defaultLang;
+
+        // Title & Toolbar
         $helper->title = $this->displayName;
-        $helper->show_toolbar = true;        // false -> remove toolbar
-        $helper->toolbar_scroll = false;      // yes - > Toolbar is always visible on the top of the screen.
-        $helper->submit_action = 'submit'.$this->name;
-        $helper->toolbar_btn = array(
-            'save' =>
-            array(
-                'desc' => $this->l('Save')
-                ,'href' => AdminController::$currentIndex.'&configure='.$this->name.'&save'.$this->name.
-                           '&token='.Tools::getAdminTokenLite('AdminModules')
-            )
-            ,'back' => array(
-                'href' => AdminController::$currentIndex.'&token='.Tools::getAdminTokenLite('AdminModules')
-                ,'desc' => $this->l('Back to list')
-            )
-        );
-                
-        $helper->fields_value['PF_API_BRANCH']   = Configuration::get('PF_API_BRANCH');
-        $helper->fields_value['PF_API_USER']     = Configuration::get('PF_API_USER');
-        $helper->fields_value['PF_ENVIRONMENT']  = Configuration::get('PF_ENVIRONMENT');
-        $helper->fields_value['PF_NO_MAIL']      = Configuration::get('PF_NO_MAIL');
-        $helper->fields_value['PF_EXCHANGE']     = Configuration::get('PF_EXCHANGE');
-        $helper->fields_value['PF_INSTALLMENTS'] = Configuration::get('PF_INSTALLMENTS');
-        
-        return $helper->generateForm($fields_form);
+        $helper->show_toolbar = true;
+        $helper->toolbar_scroll = true;
+        $helper->submit_action = 'submit' . $this->name;
+        $url = $helper->currentIndex . '&token=' . $helper->token;
+        $helper->toolbar_btn = [
+            'save' => [
+                'desc' => $this->l('Save'),
+                'href' => $url . '&save' . $this->name
+            ],
+            'back' => [
+                'href' => $url,
+                'desc' => $this->l('Back to list')
+            ]
+        ];
+
+        $helper->fields_value = $this->getValuesPagoFacil();
+
+        return $helper->generateForm($fieldsForm);
     }
-    
-    
-    
+
+    protected function getFieldsFormConfig()
+    {
+        return [
+            'legend' => [
+                'title' => 'PagoFácil configuration settings'
+            ],
+            'input' => [
+                [
+                    'type' => 'text',
+                    'class' => 'input-sm form-control',
+                    'label' => 'API Key Usuario',
+                    'name' => 'PF_API_USER',
+                    'size' => 60,
+                    'required' => true
+                ], [
+                    'type' => 'text',
+                    'class' => 'input-sm form-control',
+                    'label' => 'API Key Sucursal',
+                    'name' => 'PF_API_BRANCH',
+                    'size' => 60,
+                    'required' => true
+                ], [
+                    'type' => 'select',
+                    'label' => 'Environment',
+                    'name' => 'PF_ENVIRONMENT',
+                    'desc' => 'Stage/Production environments',
+                    'required' => true,
+                    'options' => [
+                        'query' => [
+                            [
+                                'id_option' => 0,
+                                'name' => 'Stage/Sandbox/Test'
+                            ], [
+                                'id_option' => 1,
+                                'name' => 'Production'
+                            ]
+                        ],
+                        'id' => 'id_option',
+                        'name' => 'name'
+                    ]
+                ], [
+                    'type' => 'select',
+                    'label' => 'Currency Exchange',
+                    'name' => 'PF_EXCHANGE',
+                    'options' => [
+                        'query' => [
+                            [
+                                'id_option' => 'MXN',
+                                'name' => 'Mexico (MXN)'
+                            ], [
+                                'id_option' => 'USD',
+                                'name' => 'USA (USD)'
+                            ]
+                        ],
+                        'id' => 'id_option',
+                        'name' => 'name'
+                    ]
+                ], [
+                    'type' => 'select',
+                    'label' => 'Enabled Installments',
+                    'name' => 'PF_INSTALLMENTS',
+                    'options' => [
+                        'query' => [
+                            [
+                                'id_option' => 0,
+                                'name' => 'No'
+                            ], [
+                                'id_option' => 1,
+                                'name' => 'SÍ'
+                            ]
+                        ],
+                        'id' => 'id_option',
+                        'name' => 'name'
+                    ]
+                ]
+            ],
+            'submit' => [
+                'title' => $this->trans('Save'),
+                'class' => 'btn btn-primary pull-right'
+            ]
+        ];
+    }
+
+    protected function updateValuesPagoFacil()
+    {
+        $apiUser = $this->getValueConfig('PF_API_USER');
+        $apiBranch = $this->getValueConfig('PF_API_BRANCH');
+        $environment = $this->getValueConfig('PF_ENVIRONMENT');
+        $noMail = $this->getValueConfig('PF_NO_MAIL');
+        $exchange = $this->getValueConfig('PF_EXCHANGE');
+        $installments = $this->getValueConfig('PF_INSTALLMENTS');
+
+        Configuration::updateValue('PF_API_USER',    $apiUser);
+        Configuration::updateValue('PF_API_BRANCH',  $apiBranch);
+        Configuration::updateValue('PF_ENVIRONMENT', $environment);
+        Configuration::updateValue('PF_NO_MAIL',     $noMail);
+        Configuration::updateValue('PF_EXCHANGE',    $exchange);
+        Configuration::updateValue('PF_INSTALLMENTS', $installments);
+    }
+
+    protected function getValuesPagoFacil()
+    {
+        return [
+            'PF_API_BRANCH' => Configuration::get('PF_API_BRANCH'),
+            'PF_API_USER' => Configuration::get('PF_API_USER'),
+            'PF_ENVIRONMENT' => Configuration::get('PF_ENVIRONMENT'),
+            'PF_NO_MAIL' => Configuration::get('PF_NO_MAIL'),
+            'PF_EXCHANGE' => Configuration::get('PF_EXCHANGE'),
+            'PF_INSTALLMENTS' => Configuration::get('PF_INSTALLMENTS')
+        ];
+    }
+
+    protected function getValueConfig($value)
+    {
+        return strval(Tools::getValue($value));
+    }   
 }

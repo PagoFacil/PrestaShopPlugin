@@ -1,8 +1,7 @@
 <p class="payment_module">
-	<a href="{$link->getModuleLink('pagofacil', 'payment', [], true)}" title="{l s='Pay by pagofacil' mod='pagofacil'}">
-		<img style="float:left;" src="{$this_path}logo.png" alt="{l s='Pagar con PagoFácil' mod='pagofacil'}" width="103"/>
-		<br>Realizar el pago con PagoFácil
-		<br>Con tarjeta de crédito o débito
-		<br style="clear:both;">
-	</a>
+    Formulario para Procesar con PagoFacil
+  	<img src="{$module_dir}pagofacil/logo.png" alt="{l s='Pagar con PagoFácil' mod='pagofacil'}" width="25%">
+    <h4>
+        Realizar el pago con PagoFácil <small>Tarjeta de Crédito/Débito</small>
+    </h4>
 </p>
