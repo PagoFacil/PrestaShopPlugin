@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Módulo para procesar pagos mediante PagoFacil
+ * Versiones de Prestashop 1.7.* soportadas
+ *
+ * @package Modules\Pagofacil
+ * @author  PagoFacil <soporte@pagofacil.net>
+ * @version 2.0 Verion Updated
+ * @link    http://pagofacil.net
+ * @since 1.7 Since Prestashop v1.7.*
+ */
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -8,8 +18,13 @@ use PrestaShop\PrestaShop\Core\Payment\PaymentOption;
 
 class Pagofacil extends PaymentModule
 {
+    /**
+     * Construct
+     * Initialize Module
+     */
     public function __construct()
     {
+        // Module Data
         $this->name = 'pagofacil';
         $this->tab = 'payments_gateways';
         $this->version = '2.0';
@@ -33,9 +48,13 @@ class Pagofacil extends PaymentModule
         );
     }
 
+    /**
+     * Install Module
+     * @return bool Is installed
+     */
     public function install()
     {
-        if (!parent::install() 
+        if (!parent::install()
             || !$this->registerHook('paymentOptions')
             || !$this->registerHook('paymentReturn')
         ) {
@@ -44,6 +63,10 @@ class Pagofacil extends PaymentModule
         return true;
     }
 
+    /**
+     * Uninstall Module
+     * @return bool Uninstalled Module
+     */
     public function uninstall()
     {
         if (!Configuration::deleteByName('PF_API_USER')
@@ -59,12 +82,17 @@ class Pagofacil extends PaymentModule
         return true;
     }
 
+    /**
+     * Hook Payment Options
+     * @param  array $params Params
+     * @return array         List of Payment Options
+     */
     public function hookPaymentOptions($params)
     {
         if (!$this->active) {
             return;
         }
-
+        // Create new PaymentOption
         $option = new PaymentOption();
         $option->setCallToActionText($this->l('Pagar con PagoFácil'))
             ->setForm($this->generateForm($params))
@@ -75,6 +103,11 @@ class Pagofacil extends PaymentModule
         return [$option];
     }
 
+    /**
+     * Generate Form
+     * @param  array $params Params
+     * @return SmartyTemplate         View
+     */
     protected function generateForm($params)
     {
         $cart = $params['cart'];
@@ -82,40 +115,47 @@ class Pagofacil extends PaymentModule
         $invoiceAddress = new Address($cart->id_address_invoice);
         $state = new State($invoiceAddress->id_state);
 
-        $this->context->smarty->assign([
-            'meses' => $this->getMonths(),
-            'anios' => $this->getYears(),
-            'nbProducts' => $cart->nbProducts(),
-            'monto' => $cart->getOrderTotal(true, Cart::BOTH),
-            'total' => Tools::displayPrice(
-                $cart->getOrderTotal(true, Cart::BOTH),
-                new Currency($params['cart']->id_currency),
-                false
-            ),
-            'currency' => $this->getCurrency($cart->id_currency)[0],
-            'nombre' => $customer->customer_firstname,
-            'apellidos' => $customer->customer_lastname,
-            'cp' => $invoiceAddress->postcode,
-            'email' => $customer->email,
-            'telefono' => $invoiceAddress->phone,
-            'celular' => $invoiceAddress->phone_mobile,
-            'calleyNumero' => $invoiceAddress->address1,
-            'colonia' => '',
-            'municipio' => $invoiceAddress->city,
-            'estado' => $state->name,
-            'pais' => $invoiceAddress->country,
-            'errors' => $this->getErrorsValidation(),
-            'installments' => (boolean) Configuration::get('PF_INSTALLMENTS'),
-            'action' => $this->context->link->getModuleLink($this->name, 'validation', array(), true)
-        ]);
+        // Assign Vars to Smarty View
+        $this->context->smarty->assign(
+            [
+                'meses' => $this->getMonths(),
+                'anios' => $this->getYears(),
+                'nbProducts' => $cart->nbProducts(),
+                'monto' => $cart->getOrderTotal(true, Cart::BOTH),
+                'total' => Tools::displayPrice(
+                    $cart->getOrderTotal(true, Cart::BOTH),
+                    new Currency($params['cart']->id_currency),
+                    false
+                ),
+                'currency' => $this->getCurrency($cart->id_currency)[0],
+                'nombre' => $customer->customer_firstname,
+                'apellidos' => $customer->customer_lastname,
+                'cp' => $invoiceAddress->postcode,
+                'email' => $customer->email,
+                'telefono' => $invoiceAddress->phone,
+                'celular' => $invoiceAddress->phone_mobile,
+                'calleyNumero' => $invoiceAddress->address1,
+                'colonia' => '',
+                'municipio' => $invoiceAddress->city,
+                'estado' => $state->name,
+                'pais' => $invoiceAddress->country,
+                'errors' => $this->getValidationErrors(),
+                'installments' => (boolean) Configuration::get('PF_INSTALLMENTS'),
+                'action' => $this->context->link->getModuleLink($this->name, 'validation', array(), true)
+            ]
+        );
 
         return $this->context->smarty->fetch('module:pagofacil/views/templates/front/payment_form.tpl');
     }
 
-    private function getErrorsValidation()
+    /**
+     * Get Valiation Errors
+     * @return array Errors
+     */
+    private function getValidationErrors()
     {
         $errors = [];
-        if ( array_key_exists('errors', $_SESSION) && is_array($_SESSION['errors'])) {
+        if (array_key_exists('errors', $_SESSION) && is_array($_SESSION['errors'])) {
             foreach ($_SESSION['errors'] as $k => $v) {
                 $errors[$k] = $v;
             }
@@ -125,6 +165,10 @@ class Pagofacil extends PaymentModule
         return $errors;
     }
 
+    /**
+     * Generate Years
+     * @return array Years
+     */
     private function getYears()
     {
         $years = [];
@@ -135,6 +179,10 @@ class Pagofacil extends PaymentModule
         return $years;
     }
 
+    /**
+     * Generate Months
+     * @return array Months
+     */
     private function getMonths()
     {
         $months = [];
@@ -144,13 +192,19 @@ class Pagofacil extends PaymentModule
         return $months;
     }
 
+    /**
+     * Hook Payment Return
+     * @param  array $params Params
+     * @return SmartyTemplate         Payment Successful
+     */
     public function hookPaymentReturn($params)
     {
         if (!$this->active) {
             return;
         }
 
-        $this->smarty->assign(array(
+        $this->smarty->assign(
+            array(
             'total' => Tools::displayPrice(
                 $params['order']->getOrdersTotalPaid(),
                 new Currency($params['order']->id_currency),
@@ -164,15 +218,20 @@ class Pagofacil extends PaymentModule
             'description' => Tools::getValue('description'),
             'message' => Tools::getValue('message'),
             'status' => Tools::getValue('status')
-        ));
+            )
+        );
 
         return $this->fetch('module:pagofacil/views/templates/front/payment_return.tpl');
     }
     
+    /**
+     * Get Content to Update Config
+     * @return html Content
+     */
     public function getContent()
     {
         $output = null;
-        
+        // Update Config Values
         if (Tools::isSubmit('submit'.$this->name)) {
             $this->updateValuesPagoFacil();
             $output .= $this->displayConfirmation(
@@ -183,6 +242,10 @@ class Pagofacil extends PaymentModule
         return $output . $this->displayForm();
     }
 
+    /**
+     * Display Form to Update Config
+     * @return Html Content
+     */
     protected function displayForm()
     {
         // Default Language
@@ -224,6 +287,10 @@ class Pagofacil extends PaymentModule
         return $helper->generateForm($fieldsForm);
     }
 
+    /**
+     * Get Fields to Update Config
+     * @return array Inputs Config
+     */
     protected function getFieldsFormConfig()
     {
         return [
@@ -307,6 +374,10 @@ class Pagofacil extends PaymentModule
         ];
     }
 
+    /**
+     * Update Values Config
+     * @return void
+     */
     protected function updateValuesPagoFacil()
     {
         $apiUser = $this->getValueConfig('PF_API_USER');
@@ -316,14 +387,18 @@ class Pagofacil extends PaymentModule
         $exchange = $this->getValueConfig('PF_EXCHANGE');
         $installments = $this->getValueConfig('PF_INSTALLMENTS');
 
-        Configuration::updateValue('PF_API_USER',    $apiUser);
-        Configuration::updateValue('PF_API_BRANCH',  $apiBranch);
+        Configuration::updateValue('PF_API_USER', $apiUser);
+        Configuration::updateValue('PF_API_BRANCH', $apiBranch);
         Configuration::updateValue('PF_ENVIRONMENT', $environment);
-        Configuration::updateValue('PF_NO_MAIL',     $noMail);
-        Configuration::updateValue('PF_EXCHANGE',    $exchange);
+        Configuration::updateValue('PF_NO_MAIL', $noMail);
+        Configuration::updateValue('PF_EXCHANGE', $exchange);
         Configuration::updateValue('PF_INSTALLMENTS', $installments);
     }
 
+    /**
+     * Get Config Values
+     * @return array Config Values
+     */
     protected function getValuesPagoFacil()
     {
         return [
@@ -336,8 +411,13 @@ class Pagofacil extends PaymentModule
         ];
     }
 
+    /**
+     * Get Config Value
+     * @param  string $value Value
+     * @return string        Value
+     */
     protected function getValueConfig($value)
     {
         return strval(Tools::getValue($value));
-    }   
+    }
 }

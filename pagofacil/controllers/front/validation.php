@@ -1,16 +1,52 @@
 <?php
+
 /**
- * @since 1.5.0
+ * Validate data from PagoFacil Form
+ * @package Modules\Controllers
+ * @version  2.0 Version 2.0
+ * @author PagoFacil <soporte@pagofacil.net>
  */
 class PagofacilValidationModuleFrontController extends ModuleFrontController
 {
+    /**
+     * Customer Cart
+     * @var null
+     */
     private $cartCustomer = null;
+
+    /**
+     * Customer
+     * @var null
+     */
     private $customer = null;
+
+    /**
+     * Path to Checkout
+     * @var null
+     */
     private $pathToCheckout = null;
+
+    /**
+     * Errors Validation Message
+     * @var null
+     */
     private $messageErrorsValidation = null;
+
+    /**
+     * URL's to Process Payment
+     * @var array
+     */
     private $urls = [];
+
+    /**
+     * Endpoint to Process Payment
+     * @var null
+     */
     private $endpoint = null;
 
+    /**
+     * Construct
+     */
     public function __construct()
     {
         parent::__construct();
@@ -22,13 +58,22 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         ];
     }
 
-    private function redirectToStep( $step = 1 )
+    /**
+     * Redirect to Checkout Step
+     * @param  integer $step Step
+     * @return Redirect        Redirect to Step
+     */
+    private function redirectToStep($step = 1)
     {
         $step = $step >= 1 && $step <= 4 ? $step : 1;
         $path = $this->pathToCheckout . "&step=" . $step;
         Tools::redirect($path);
     }
 
+    /**
+     * Valdiate Process Order
+     * @return mixed Redirect if is not valid
+     */
     private function validateProcessOrder()
     {
         if ($this->cartCustomer->id_customer == 0
@@ -40,6 +85,10 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         }
     }
 
+    /**
+     * Authorize to use Module
+     * @return mixed Redirect if is not auhtorized
+     */
     private function authorize()
     {
         // Check that this payment option is still available in case the
@@ -54,20 +103,30 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
 
         if (!$authorized) {
             die($this->module->l(
-                'Este método de pago no está disponible.', 
+                'Este método de pago no está disponible.',
                 'validation'
             ));
         }
     }
 
-    private function validateLoadedObject( $object )
+    /**
+     * Validate Object Loaded
+     * @param  Object $object Object to Check
+     * @return mixed         Redirect if is not valid
+     */
+    private function validateLoadedObject($object)
     {
         if (!Validate::isLoadedObject($object)) {
             $this->redirectToStep();
         }
     }
 
-    private function getMessageErrorsValidation( $type )
+    /**
+     * Get Messages Errors Validation
+     * @param  string $type Type of Error
+     * @return array       Messages Errors
+     */
+    private function getMessageErrorsValidation($type)
     {
         $errors = [
             'config' => [
@@ -97,7 +156,13 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         return $errors[$type];
     }
 
-    private function validateData( $messages = array(), $config = true )
+    /**
+     * Validate Data
+     * @param  array   $messages Messages
+     * @param  boolean $config   Type Config
+     * @return mixed Redirect if validation fail
+     */
+    private function validateData($messages = array(), $config = true)
     {
         $errors = [];
         foreach ($messages as $k => $m) {
@@ -113,23 +178,44 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         }
     }
 
+    /**
+     * Get Value to URL Encode
+     * @param  mixed $value Value
+     * @return mixed        Value Encoded
+     */
     private function getUrlEncoded($value)
     {
         return urlencode($value);
     }
 
+    /**
+     * Get value from Params or Config
+     * @param  mixed  $value  Value
+     * @param  boolean $config Is Config Type
+     * @return mixed          Value
+     */
     private function getValue($value, $config = false)
     {
         $value = $config ? Configuration::get($value) : Tools::getValue($value);
         return trim($value);
     }
 
-    private function getValueEncoded( $value, $config = false )
+    /**
+     * Get Value Encoded from Config or Params
+     * @param  mixed  $value  Value
+     * @param  boolean $config Type
+     * @return mixed          Value Encoded
+     */
+    private function getValueEncoded($value, $config = false)
     {
         $value = $this->getValue($value, $config);
         return $this->getUrlEncoded($value);
     }
 
+    /**
+     * Get Data to Process Payment
+     * @return array Data
+     */
     private function getData()
     {
         $data = [
@@ -178,6 +264,11 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         return $data;
     }
 
+    /**
+     * Execute Curl to process payment
+     * @param  string $url URL
+     * @return array      Response
+     */
     private function executeCurl($url)
     {
         $ch = curl_init();
@@ -190,11 +281,20 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         return $response;
     }
 
+    /**
+     * Decode Response
+     * @param  mixed $response Response
+     * @return array           Response Decoded
+     */
     private function decode($response)
     {
         return json_decode($response, true);
     }
 
+    /**
+     * Process Payment
+     * @return mixed Response
+     */
     public function postProcess()
     {
         $this->cartCustomer = $this->context->cart;
@@ -214,8 +314,9 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         $response = $this->executeCurl($url);
         $response = $this->decode($response);
 
-        if ( $response === null 
-            || !isset($response['WebServices_Transacciones']['transaccion']) 
+        // Process Payment failure
+        if ($response === null
+            || !isset($response['WebServices_Transacciones']['transaccion'])
             || $response['WebServices_Transacciones']['transaccion']['autorizado'] != '1'
         ) {
             $authorized = $response['WebServices_Transacciones']['transaccion']['autorizado'];
@@ -234,23 +335,24 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             return $this->setTemplate('module:pagofacil/views/templates/front/payment_error.tpl');
         }
 
-        // Validate Order
+        // Validate Order if Payment was processed
         $this->module->validateOrder(
-            (int)$this->cartCustomer->id, 
-            2, 
-            (float) $this->cartCustomer->getOrderTotal(true, Cart::BOTH), 
-            $this->module->displayName, 
-            null, 
-            [], 
-            (int)$this->context->currency->id, 
+            (int)$this->cartCustomer->id,
+            2,
+            (float) $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+            $this->module->displayName,
+            null,
+            [],
+            (int)$this->context->currency->id,
             false,
             $this->customer->secure_key
         );
+        // Redirect To Confirmation Page
         $response = $response['WebServices_Transacciones']['transaccion'];
         Tools::redirect(
-            'index.php?controller=order-confirmation&id_cart='. (int) $this->cartCustomer->id . 
+            'index.php?controller=order-confirmation&id_cart='. (int) $this->cartCustomer->id .
             '&id_module=' . (int)$this->module->id .
-            '&id_order=' . $this->module->currentOrder . 
+            '&id_order=' . $this->module->currentOrder .
             '&key=' . $this->customer->secure_key .
             '&transaction=' . $response['transaccion'] .
             '&no_authorization=' . $response['autorizacion'] .
