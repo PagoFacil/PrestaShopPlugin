@@ -53,7 +53,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         $this->pathToCheckout = 'index.php?controller=order';
         $this->endpoint = 'Wsrtransaccion/index/format/json';
         $this->urls = [
-            'http://corepf.local.com/',
+            'https://stapi.pagofacil.net/',
             'https://www.pagofacil.net/ws/public/'
         ];
     }
