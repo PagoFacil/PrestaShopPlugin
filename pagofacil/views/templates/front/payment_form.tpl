@@ -1,4 +1,4 @@
-<form action="{$action}" id="pagofacil">
+<form action="{$action}" id="pagofacil" method="POST">
 
 {if count($errors) > 0}
     <div class="alert alert-danger">

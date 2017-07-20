@@ -32,7 +32,7 @@
                     <div class="row">
                         <div class="col-md-12">
                         	<a href="{$params['link']}" class="btn btn-lg btn-success">
-                        		{l s='Try Again'}
+                        		{l s='Intentar Nuevamente'}
                         	</a>
                         </div>
                     </div>

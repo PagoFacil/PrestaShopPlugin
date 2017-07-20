@@ -18,6 +18,12 @@ use PrestaShop\PrestaShop\Core\Payment\PaymentOption;
 
 class Pagofacil extends PaymentModule
 {
+    private $cartCustomer = null;
+    private $client = null;
+    private $urls = [];
+    private $endpoint = null;
+    private $pathToCheckout = null;
+    private $lastCurlInfo = null;
     /**
      * Construct
      * Initialize Module
@@ -34,7 +40,7 @@ class Pagofacil extends PaymentModule
             'min' => '1.7',
             'max' => _PS_VERSION_
         ];
-        $this->controllers = ['validation'];
+        $this->controllers = ['validation', 'webhook'];
         $this->bootstrap = true;
 
         parent::__construct();
@@ -46,6 +52,50 @@ class Pagofacil extends PaymentModule
         $this->confirmUninstall = $this->l(
             '¿Estás seguro que desea desinstalar el módulo?'
         );
+
+        // Own Config
+        $this->urls = [
+            'https://stapi.pagofacil.net/',
+            'https://www.pagofacil.net/ws/public/'
+        ];
+        $this->pathToCheckout = 'index.php?controller=order';
+    }
+
+    /**
+     * Get Process Url
+     * @param  string $index Index
+     * @return string        URL
+     */
+    public function getProcessUrl($index)
+    {
+        return $this->urls[$index];
+    }
+
+    /**
+     * Set Endpoint
+     * @param string $endpoint Endpoint
+     */
+    public function setEndpoint($endpoint)
+    {
+        $this->endpoint = $endpoint;
+    }
+
+    /**
+     * Get Endpoint
+     * @return string Endpoint
+     */
+    public function getEndpoint()
+    {
+        return $this->endpoint;
+    }
+
+    /**
+     * Get Path to Checkout
+     * @return string Checkout
+     */
+    public function getPathToCheckout()
+    {
+        return $this->pathToCheckout;
     }
 
     /**
@@ -75,6 +125,7 @@ class Pagofacil extends PaymentModule
             || !Configuration::deleteByName('PF_NO_MAIL')
             || !Configuration::deleteByName('PF_EXCHANGE')
             || !Configuration::deleteByName('PF_INSTALLMENTS')
+            || !Configuration::deleteByName('PF_CONCEPTO')
             || !parent::uninstall()
         ) {
             return false;
@@ -92,27 +143,54 @@ class Pagofacil extends PaymentModule
         if (!$this->active) {
             return;
         }
-        // Create new PaymentOption
+
+        $this->cartCustomer = $params['cart'];
+        $this->client = $params['cookie'];
+
+        return [
+            $this->getPagoFacilPyamentOption(),
+            $this->getPagoFacilCashPaymentOption()
+        ];
+    }
+
+    /**
+     * Get PagoFacil Cash Payment Option
+     * @return PaymentOption Payment Option
+     */
+    protected function getPagoFacilCashPaymentOption()
+    {
         $option = new PaymentOption();
-        $option->setCallToActionText($this->l('Pagar con PagoFácil'))
-            ->setForm($this->generateForm($params))
+        $option->setCallToActionText($this->l('Pagar con PagoFácil Cash'))
+            ->setForm($this->generateFormCash())
             ->setAdditionalInformation(
                 $this->fetch('module:pagofacil/views/templates/front/payment_infos.tpl')
             );
+        return $option;
+    }
 
-        return [$option];
+    /**
+     * Get PagoFacil Payment Option
+     * @return PaymentOption Payment Option
+     */
+    protected function getPagoFacilPyamentOption()
+    {
+        // Create new PagoFacil PaymentOption
+        $option = new PaymentOption();
+        $option->setCallToActionText($this->l('Pagar con PagoFácil'))
+            ->setForm($this->generateForm())
+            ->setAdditionalInformation(
+                $this->fetch('module:pagofacil/views/templates/front/payment_infos.tpl')
+            );
+        return $option;
     }
 
     /**
      * Generate Form
-     * @param  array $params Params
      * @return SmartyTemplate         View
      */
-    protected function generateForm($params)
+    protected function generateForm()
     {
-        $cart = $params['cart'];
-        $customer = $params['cookie'];
-        $invoiceAddress = new Address($cart->id_address_invoice);
+        $invoiceAddress = new Address($this->cartCustomer->id_address_invoice);
         $state = new State($invoiceAddress->id_state);
 
         // Assign Vars to Smarty View
@@ -120,18 +198,17 @@ class Pagofacil extends PaymentModule
             [
                 'meses' => $this->getMonths(),
                 'anios' => $this->getYears(),
-                'nbProducts' => $cart->nbProducts(),
-                'monto' => $cart->getOrderTotal(true, Cart::BOTH),
+                'nbProducts' => $this->cartCustomer->nbProducts(),
+                'monto' => $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
                 'total' => Tools::displayPrice(
-                    $cart->getOrderTotal(true, Cart::BOTH),
-                    new Currency($params['cart']->id_currency),
+                    $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+                    new Currency($this->cartCustomer->id_currency),
                     false
                 ),
-                'currency' => $this->getCurrency($cart->id_currency)[0],
-                'nombre' => $customer->customer_firstname,
-                'apellidos' => $customer->customer_lastname,
+                'nombre' => $this->client->customer_firstname,
+                'apellidos' => $this->client->customer_lastname,
                 'cp' => $invoiceAddress->postcode,
-                'email' => $customer->email,
+                'email' => $this->client->email,
                 'telefono' => $invoiceAddress->phone,
                 'celular' => $invoiceAddress->phone_mobile,
                 'calleyNumero' => $invoiceAddress->address1,
@@ -141,11 +218,69 @@ class Pagofacil extends PaymentModule
                 'pais' => $invoiceAddress->country,
                 'errors' => $this->getValidationErrors(),
                 'installments' => (boolean) Configuration::get('PF_INSTALLMENTS'),
-                'action' => $this->context->link->getModuleLink($this->name, 'validation', array(), true)
+                'action' => $this->context->link->getModuleLink(
+                    $this->name, 
+                    'validation', 
+                    ['type' => 'tp'],
+                    true
+                )
             ]
         );
 
         return $this->context->smarty->fetch('module:pagofacil/views/templates/front/payment_form.tpl');
+    }
+
+    /**
+     * Generate Form Cash
+     * @return SmartyTemplate Form
+     */
+    protected function generateFormCash()
+    {
+        $this->context->smarty->assign(
+            [
+                'nbProducts' => $this->cartCustomer->nbProducts(),
+                'monto' => $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+                'total' => Tools::displayPrice(
+                    $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+                    new Currency($this->cartCustomer->id_currency),
+                    false
+                ),
+                'nombre' => $this->client->customer_firstname,
+                'apellidos' => $this->client->customer_lastname,
+                'email' => $this->client->email,
+                'stores' => $this->getConvenienceStores(),
+                'errors' => $this->getValidationErrors(),
+                'action' => $this->context->link->getModuleLink(
+                    $this->name, 
+                    'validation',
+                    ['type' => 'cash'],
+                    true
+                )
+            ]
+        );
+        return $this->context->smarty->fetch('module:pagofacil/views/templates/front/payment_cash_form.tpl');
+    }
+
+    /**
+     * Get Convenience Stores
+     * @return array Stores
+     */
+    protected function getConvenienceStores()
+    {
+        $this->endpoint = 'cash/Rest_Conveniencestores';
+
+        $url = $this->getProcessUrl($this->getValueConfig('PF_ENVIRONMENT', false)) . $this->endpoint;
+        $response = $this->executeCurl($url);
+        $response = $this->decode($response);
+
+        $stores = [];
+        if ($this->lastCurlInfo['http_code'] == 200
+            && array_key_exists('records', $response)
+            && $response['total'] > 0
+        ) {
+            $stores = $response['records'];
+        }
+        return $stores;
     }
 
     /**
@@ -161,7 +296,9 @@ class Pagofacil extends PaymentModule
             }
             unset($_SESSION['errors']);
         }
-        session_destroy();
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
         return $errors;
     }
 
@@ -203,8 +340,8 @@ class Pagofacil extends PaymentModule
             return;
         }
 
-        $this->smarty->assign(
-            array(
+        // Generate data
+        $data = [
             'total' => Tools::displayPrice(
                 $params['order']->getOrdersTotalPaid(),
                 new Currency($params['order']->id_currency),
@@ -212,14 +349,20 @@ class Pagofacil extends PaymentModule
             ),
             'shop_name' => $this->context->shop->name,
             'id_order' => $params['order']->reference,
-            'payment' => $params['order']->payment,
-            'transaction' => Tools::getValue('transaction'),
-            'no_authorization' => Tools::getValue('no_authorization'),
-            'description' => Tools::getValue('description'),
-            'message' => Tools::getValue('message'),
-            'status' => Tools::getValue('status')
-            )
-        );
+            'payment' => $params['order']->payment
+        ];
+        $paramsGet = array_diff_key($_GET, array_flip([
+            'id_cart',
+            'id_order',
+            'id_module',
+            'key',
+            'customer_order',
+            'isolang',
+            'id_lang',
+            'controller'
+        ]));
+        $data = array_merge($data, $paramsGet);
+        $this->smarty->assign($data);
 
         return $this->fetch('module:pagofacil/views/templates/front/payment_return.tpl');
     }
@@ -238,8 +381,25 @@ class Pagofacil extends PaymentModule
                 $this->l('Settings Updated')
             );
         }
+        $output .= $this->extraConfig();
+        $output .= $this->displayForm();
 
-        return $output . $this->displayForm();
+        return $output;
+    }
+
+    /**
+     * Get Extra Config
+     * @return SmartyTemplate Extra Config Settings
+     */
+    private function extraConfig()
+    {
+        $this->context->smarty->assign(
+            [
+                'manager_link' => 'http://manager.pagofacil.net/cash/config/',
+                'link_webhook' => $this->context->link->getModuleLink($this->name, 'webhook')
+            ]
+        );
+        return $this->display(__FILE__, '../admin/payment_extra_config.tpl');
     }
 
     /**
@@ -365,6 +525,13 @@ class Pagofacil extends PaymentModule
                         'id' => 'id_option',
                         'name' => 'name'
                     ]
+                ], [
+                    'type' => 'text',
+                    'class' => 'input-sm form-control',
+                    'label' => 'Concept (PagoFácil Cash)',
+                    'name' => 'PF_CONCEPTO',
+                    'size' => 60,
+                    'required' => true
                 ]
             ],
             'submit' => [
@@ -386,6 +553,7 @@ class Pagofacil extends PaymentModule
         $noMail = $this->getValueConfig('PF_NO_MAIL');
         $exchange = $this->getValueConfig('PF_EXCHANGE');
         $installments = $this->getValueConfig('PF_INSTALLMENTS');
+        $concept = $this->getValueConfig('PF_CONCEPTO');
 
         Configuration::updateValue('PF_API_USER', $apiUser);
         Configuration::updateValue('PF_API_BRANCH', $apiBranch);
@@ -393,6 +561,7 @@ class Pagofacil extends PaymentModule
         Configuration::updateValue('PF_NO_MAIL', $noMail);
         Configuration::updateValue('PF_EXCHANGE', $exchange);
         Configuration::updateValue('PF_INSTALLMENTS', $installments);
+        Configuration::updateValue('PF_CONCEPTO', $concept);
     }
 
     /**
@@ -407,17 +576,73 @@ class Pagofacil extends PaymentModule
             'PF_ENVIRONMENT' => Configuration::get('PF_ENVIRONMENT'),
             'PF_NO_MAIL' => Configuration::get('PF_NO_MAIL'),
             'PF_EXCHANGE' => Configuration::get('PF_EXCHANGE'),
-            'PF_INSTALLMENTS' => Configuration::get('PF_INSTALLMENTS')
+            'PF_INSTALLMENTS' => Configuration::get('PF_INSTALLMENTS'),
+            'PF_CONCEPTO' => Configuration::get('PF_CONCEPTO')
         ];
     }
 
     /**
      * Get Config Value
      * @param  string $value Value
+     * @param boole $asParam Get From Params or DB
      * @return string        Value
      */
-    protected function getValueConfig($value)
+    public function getValueConfig($value, $asParam = true)
     {
-        return strval(Tools::getValue($value));
+        return $asParam ? strval(Tools::getValue($value)) : Configuration::get($value);
+    }
+
+    /**
+     * Execute Curl to process payment
+     * @param  string $url URL
+     * @return array      Response
+     */
+    public function executeCurl($url, $method = 'GET', $body = [])
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        if ( $method == 'POST' ) {
+            curl_setopt($ch, CURLOPT_POST, count($body));
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        $this->lastCurlInfo = curl_getinfo($ch);
+        curl_close($ch);
+
+        return $response;
+    }
+
+    /**
+     * Decode Response
+     * @param  mixed $response Response
+     * @return array           Response Decoded
+     */
+    public function decode($response)
+    {
+        return json_decode($response, true);
+    }
+
+    /**
+     * Encode Data
+     * @param  mixed $data Data
+     * @return JSON       JSON String
+     */
+    public function encode($data)
+    {
+        return json_encode($data);
+    }
+
+     /**
+     * Redirect to Checkout Step
+     * @param  integer $step Step
+     * @return Redirect        Redirect to Step
+     */
+    public function redirectToStep($step = 1)
+    {
+        $step = $step >= 1 && $step <= 4 ? $step : 1;
+        $path = $this->pathToCheckout . "&step=" . $step;
+        Tools::redirect($path);
     }
 }

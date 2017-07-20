@@ -21,28 +21,16 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
     private $customer = null;
 
     /**
-     * Path to Checkout
-     * @var null
-     */
-    private $pathToCheckout = null;
-
-    /**
      * Errors Validation Message
      * @var null
      */
     private $messageErrorsValidation = null;
 
     /**
-     * URL's to Process Payment
-     * @var array
-     */
-    private $urls = [];
-
-    /**
-     * Endpoint to Process Payment
+     * Type of Process
      * @var null
      */
-    private $endpoint = null;
+    private $typeProcess = null;
 
     /**
      * Construct
@@ -50,24 +38,14 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
     public function __construct()
     {
         parent::__construct();
-        $this->pathToCheckout = 'index.php?controller=order';
-        $this->endpoint = 'Wsrtransaccion/index/format/json';
-        $this->urls = [
-            'https://stapi.pagofacil.net/',
-            'https://www.pagofacil.net/ws/public/'
-        ];
-    }
-
-    /**
-     * Redirect to Checkout Step
-     * @param  integer $step Step
-     * @return Redirect        Redirect to Step
-     */
-    private function redirectToStep($step = 1)
-    {
-        $step = $step >= 1 && $step <= 4 ? $step : 1;
-        $path = $this->pathToCheckout . "&step=" . $step;
-        Tools::redirect($path);
+        // Veriy Type
+        if (!in_array(Tools::getValue('type'), ['cash', 'tp'])) {
+            $this->module->redirectToStep(4);
+        }
+        $this->typeProcess = strtolower(Tools::getValue('type'));
+        $endpoint = $this->typeProcess == 'cash' ? 
+            'cash/charge' : 'Wsrtransaccion/index/format/json';
+        $this->module->setEndpoint($endpoint);
     }
 
     /**
@@ -81,7 +59,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             || $this->cartCustomer->id_address_invoice == 0
             || !$this->module->active
         ) {
-            $this->redirectToStep();
+            $this->module->redirectToStep();
         }
     }
 
@@ -117,7 +95,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
     private function validateLoadedObject($object)
     {
         if (!Validate::isLoadedObject($object)) {
-            $this->redirectToStep();
+            $this->module->redirectToStep();
         }
     }
 
@@ -136,7 +114,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
                 'PF_EXCHANGE' => ['message' => 'La moneda de pago no está configurado, contacte al administrador'],
                 'PF_INSTALLMENTS' => ['message' => 'Meses sin intereses no está configurado']
             ],
-            'input' => [
+            'tp' => [
                 'nombre' => ['message' => 'Debe capturar el nombre'],
                 'apellidos' => ['message' => 'Debe capturar los apellidos'],
                 'numeroTarjeta' => ['message' => 'Debe capturar el número de tarjeta'],
@@ -151,6 +129,12 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
                 'municipio' => ['message' => 'Debe capturar el municipio'],
                 'estado' => ['message' => 'Debe capturar el estado'],
                 'pais' => ['message' => 'Debe capturar el país']
+            ],
+            'cash' => [
+                'nombre' => ['message' => 'Debe capturar el nombre'],
+                'apellidos' => ['message' => 'Debe capturar los apellidos'],
+                'email' => ['message' => 'Debe capturar el email'],
+                'tienda' => ['message' => 'Debe seleccionar una tienda']
             ]
         ];
         return $errors[$type];
@@ -174,7 +158,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         if (count($errors) > 0) {
             session_start();
             $_SESSION['errors'] = $errors;
-            $this->redirectToStep(4);
+            $this->module->redirectToStep(4);
         }
     }
 
@@ -214,9 +198,40 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
 
     /**
      * Get Data to Process Payment
+     * @param string $type Type of Data
      * @return array Data
      */
-    private function getData()
+    private function getData($type)
+    {
+        $type = ucfirst(strtolower($type));
+        $data = "getData$type";
+        return $this->$data();
+    }
+
+    /**
+     * Get Data to Cash Payment
+     * @return array Data Cash
+     */
+    private function getDataCash()
+    {
+        return [
+            'branch_key' => $this->module->getValueConfig('PF_API_BRANCH', false),
+            'user_key' => $this->module->getValueConfig('PF_API_USER', false),
+            'order_id' => $this->cartCustomer->id,
+            'product' => $this->module->getValueConfig('PF_CONCEPTO', false),
+            'amount' => (float) $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+            'store_code' => $this->module->getValueConfig('tienda'),
+            'customer' => $this->module->getValueConfig('nombre') . ' ' . 
+                $this->module->getValueConfig('apellidos'),
+            'email' => $this->module->getValueConfig('email')
+        ];
+    }
+
+    /**
+     * Get Data Tarjeta Presente
+     * @return array Data
+     */
+    private function getDataTp()
     {
         $data = [
             'method' => 'transaccion',
@@ -265,33 +280,6 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
     }
 
     /**
-     * Execute Curl to process payment
-     * @param  string $url URL
-     * @return array      Response
-     */
-    private function executeCurl($url)
-    {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        return $response;
-    }
-
-    /**
-     * Decode Response
-     * @param  mixed $response Response
-     * @return array           Response Decoded
-     */
-    private function decode($response)
-    {
-        return json_decode($response, true);
-    }
-
-    /**
      * Process Payment
      * @return mixed Response
      */
@@ -302,63 +290,164 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         $this->authorize();
         $this->customer = new Customer($this->cartCustomer->id_customer);
         $this->validateLoadedObject($this->customer);
-        $msgErrorsInputValidation = $this->getMessageErrorsValidation('input');
+        $msgErrorsInputValidation = $this->getMessageErrorsValidation($this->typeProcess);
         $this->validateData($msgErrorsInputValidation, false);
         $msgErrorsConfigValidation = $this->getMessageErrorsValidation('config');
         $this->validateData($msgErrorsConfigValidation);
-        $data = $this->getData();
-        $url = $this->urls[$this->getValue('PF_ENVIRONMENT', true)] . $this->endpoint;
-        $url .= '?' . http_build_query($data);
+        $data = $this->getData($this->typeProcess);
+        $url = $this->module->getProcessUrl($this->getValue('PF_ENVIRONMENT', true)) . 
+            $this->module->getEndpoint();
+
+        if ($this->typeProcess == 'cash') {
+            $method = 'POST';
+            $body = $data;
+        } else {
+            $url .= '?' . http_build_query($data);
+            $method = 'GET';
+            $body = [];
+        }
 
         // Response
-        $response = $this->executeCurl($url);
-        $response = $this->decode($response);
+        $response = $this->module->executeCurl($url, $method, $body);
+        $response = $this->module->decode($response);
 
+        // Process Response
+        $type = ucfirst(strtolower($this->typeProcess));
+        $process = "processResponse$type";
+        $this->$process($response);
+    }
+
+    /**
+     * Process Response Cash Payment
+     * @param  mixed $response Response from CURL
+     * @return mixed           Redirect | Errors
+     */
+    private function processResponseCash($response)
+    {
+        // Validate Response
+        if ($response == null 
+            || !array_key_exists('error', $response)
+            || $response['error'] != 0
+            || !array_key_exists('charge', $response)
+            || !isset($response['charge'])
+        ) {
+            // Show Errors
+            $this->getErrorUnknown();
+            return $this->createErrorTemplate();
+        }
+        // Confirm Order
+        $this->validateConfirmationOrder(10);
+        // Redirect To Confirmation Page
+        $response = $response['charge'];
+        $urlRedirection = $this->getRedirectConfirmationPage([
+            'reference' => $response['reference'],
+            'customer_order' => $response['customer_order'],
+            'amount' => $response['amount'],
+            'convenience_store' => ucwords(strtolower(str_replace('_', ' ', $response['convenience_store']))),
+            'store_fixed_rate' => $response['store_fixed_rate'],
+            'store_schedule' => $response['store_schedule'],
+            'store_image' => $response['store_image'],
+            'bank_account_number' => $response['bank_account_number'],
+            'bank' => $response['bank'],
+            'expiration_date' => $response['expiration_date'],
+            'expiration_payment' => date("j M, Y", strtotime($response['expiration_date']))
+        ]);
+        Tools::redirect($urlRedirection);
+    }
+
+    /**
+     * Process Tarjeta Presente Payment
+     * @param  mixed $response Response
+     * @return mixed           Redirection | Show Errros
+     */
+    private function processResponseTp($response)
+    {
         // Process Payment failure
         if ($response === null
             || !isset($response['WebServices_Transacciones']['transaccion'])
             || $response['WebServices_Transacciones']['transaccion']['autorizado'] != '1'
         ) {
             $authorized = $response['WebServices_Transacciones']['transaccion']['autorizado'];
-            $this->context->smarty->assign([
-                'params' => [
-                    'error' => 'Ocurrió un error al procesar su pago, intente más tarde.',
-                    'link' => $this->context->link->getPageLink('order') . '?step=4'
-                ]
-            ]);
+            $this->getErrorUnknown();
 
             if ((bool) !$authorized) {
                 $this->context->smarty->assign([
                     'errors' => $response['WebServices_Transacciones']['transaccion']['error']
                 ]);
             }
-            return $this->setTemplate('module:pagofacil/views/templates/front/payment_error.tpl');
+            return $this->createErrorTemplate();
         }
 
         // Validate Order if Payment was processed
+        $this->validateConfirmationOrder(2);
+        // Redirect To Confirmation Page
+        $response = $response['WebServices_Transacciones']['transaccion'];
+        $urlRedirection = $this->getRedirectConfirmationPage([
+            'transaction' => $response['transaccion'],
+            'no_authorization' => $response['autorizacion'],
+            'description' => $response['texto'],
+            'message' => $response['pf_message'],
+            'status' => $response['status']
+        ]);
+        Tools::redirect($urlRedirection);
+    }
+
+    /**
+     * Get Text to Unknown Error
+     * @return SmartyVars Errors
+     */
+    private function getErrorUnknown()
+    {
+        $this->context->smarty->assign([
+            'params' => [
+                'error' => 'Ocurrió un error al procesar su pago, intente más tarde.',
+                'link' => $this->context->link->getPageLink('order') . '?step=4'
+            ]
+        ]);
+    }
+
+    /**
+     * Generate Error Template
+     * @return SmartyTemplate Errors
+     */
+    private function createErrorTemplate()
+    {
+        return $this->setTemplate('module:pagofacil/views/templates/front/payment_error.tpl');
+    }
+
+    /**
+     * Validate Confirmation Order
+     * @param  int $state State of Order
+     * @return boolean
+     */
+    private function validateConfirmationOrder($state)
+    {
         $this->module->validateOrder(
-            (int)$this->cartCustomer->id,
-            2,
+            (int) $this->cartCustomer->id,
+            $state,
             (float) $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
             $this->module->displayName,
             null,
             [],
-            (int)$this->context->currency->id,
+            (int) $this->context->currency->id,
             false,
             $this->customer->secure_key
         );
-        // Redirect To Confirmation Page
-        $response = $response['WebServices_Transacciones']['transaccion'];
-        Tools::redirect(
-            'index.php?controller=order-confirmation&id_cart='. (int) $this->cartCustomer->id .
-            '&id_module=' . (int)$this->module->id .
+    }
+
+    /**
+     * Generate Redirect Confirmation Page
+     * @param  array $params Params
+     * @return string         Link To Redirect
+     */
+    private function getRedirectConfirmationPage($params)
+    {
+        $params = http_build_query($params);
+        return 'index.php?controller=order-confirmation&id_cart='. (int) $this->cartCustomer->id .
+            '&id_module=' . (int) $this->module->id .
             '&id_order=' . $this->module->currentOrder .
             '&key=' . $this->customer->secure_key .
-            '&transaction=' . $response['transaccion'] .
-            '&no_authorization=' . $response['autorizacion'] .
-            '&description=' . $response['texto'] .
-            '&message=' . $response['pf_message'] .
-            '&status=' . $response['status']
-        );
+            '&type=' . $this->typeProcess .
+            '&' . $params;
     }
 }
