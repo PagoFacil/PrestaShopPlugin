@@ -17,3 +17,6 @@ Download this plugin from [our site](http://www.pagofacil.net/plugins/prestashop
  - Neighborhood [required] fix
  - Fixed the phone gathering
  - QA'ed by PF on June 2014
+
+ ### Upgrade
+ Support Prestashop v1.7.*
