@@ -15,4 +15,4 @@ Descarga el plugin correspondiente a tu versión:
 Si requieres asistencia contactanos: ayuda@pagofacil.net
 
 NOTA:
-Para realizar una imlementación correcta tu sitio debera contar con certificado SSL y el protocolo TLS 1.2 habilitado.
+Para realizar una implementación correcta tu sitio debera contar con certificado SSL y el protocolo TLS 1.2 habilitado.
