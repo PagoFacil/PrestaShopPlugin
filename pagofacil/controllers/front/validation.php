@@ -350,7 +350,8 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             'bank_account_number' => $response['bank_account_number'],
             'bank' => $response['bank'],
             'expiration_date' => $response['expiration_date'],
-            'expiration_payment' => date("j M, Y", strtotime($response['expiration_date']))
+            'expiration_payment' => date("j M, Y", strtotime($response['expiration_date'])),
+            'agreement_number' => $response['agreement_number']
         ]);
         Tools::redirect($urlRedirection);
     }

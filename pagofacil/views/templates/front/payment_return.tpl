@@ -73,10 +73,17 @@
                 </div>
                 <hr>
                 <ol>
-                    <li>
-                        <p>Ir a la caja {$convenience_store} de {$store_schedule}</p>
-                        <img src="{$store_image}" alt="PagoFácil">
-                    </li>
+                    {if ($convenience_store=='Seven Eleven')}
+                        <li>
+                            <p>Solicite un Pago a Convenio Banorte No.{$agreement_number} en una sucursal {$convenience_store}</p>
+                            <img src="{$store_image}" alt="PagoFácil">
+                        </li>
+                    {else}
+                        <li>
+                            <p>Ir a la caja {$convenience_store} de {$store_schedule}</p>
+                            <img src="{$store_image}" alt="PagoFácil">
+                        </li>
+                    {/if}
                     <li>
                         <p>Solicitar depósito a cuenta (debito): <strong>{$bank}</strong> 
                         - <strong>{$bank_account_number}</strong></p>
@@ -84,9 +91,18 @@
                     <li>
                         <p>Deposita la cantidad <strong>EXACTA</strong> de: <strong>${$total}</strong></p>
                     </li>
+                    <li>
+                        <p>Conservar el ticket comprobante del depósito</p>
+                    </li>
+                    <li>
+                        <p>Confirmar su pago con PRESERVE al teléfono 5514815350 o al correo contacto@preserevemx.com.</p>
+                    </li>
                 </ol>
+                {if ($convenience_store=='Seven Eleven')}
+                    <hr>
+                    <p>Las tiendas 7Eleven cobran en caja una comisión de $10.00 por el concepto de recepción de cobranza. En un Horario de: 8:00 - 20:00</p>
+                {/if}
                 <hr>
-
                 <div class="alert alert-info">
                     <h3>
                         <strong>Importante</strong>
