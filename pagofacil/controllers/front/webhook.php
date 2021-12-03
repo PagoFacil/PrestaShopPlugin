@@ -31,7 +31,7 @@ class PagofacilWebhookModuleFrontController extends ModuleFrontController
 		$orderId = Tools::getValue('customer_order');
         $status = Tools::getValue('status');
 
-        $status = $status == 4 ? 2 : $status;
+        $status = $status == 4 ? 2 : $status; 
 
         if (empty($orderId)
             || empty($status)
