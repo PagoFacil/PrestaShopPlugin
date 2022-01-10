@@ -75,17 +75,6 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
             'status' => 'success',
         ]);
 
-        define('SLACK_WEBHOOK', 'https://hooks.slack.com/services/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');
-
-        $message = array('payload' => json_encode(array('text'=> json_encode( array( 'CORE' => 'TEST', 'class' => __CLASS__, 'method' => __FUNCTION__, "QUERY" => $urlRedirection )))));
-        $c = curl_init(SLACK_WEBHOOK);
-        curl_setopt($c, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($c, CURLOPT_POST, true);
-        curl_setopt($c, CURLOPT_POSTFIELDS, $message);
-        curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
-        $output = curl_exec($c);
-        curl_close($c);
-
         Tools::redirect($urlRedirection);
 
     }
