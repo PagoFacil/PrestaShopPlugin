@@ -43,7 +43,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             $this->module->redirectToStep(4);
         }
         $this->typeProcess = strtolower(Tools::getValue('type'));
-        $endpoint = $this->typeProcess == 'cash' ? 
+        $endpoint = $this->typeProcess == 'cash' ?
             'cash/charge' : 'Wsrtransaccion/index/format/json';
         $this->module->setEndpoint($endpoint);
     }
@@ -221,7 +221,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             'product' => $this->module->getValueConfig('PF_CONCEPTO', false),
             'amount' => (float) $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
             'store_code' => $this->module->getValueConfig('tienda'),
-            'customer' => $this->module->getValueConfig('nombre') . ' ' . 
+            'customer' => $this->module->getValueConfig('nombre') . ' ' .
                 $this->module->getValueConfig('apellidos'),
             'email' => $this->module->getValueConfig('email')
         ];
@@ -233,6 +233,16 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
      */
     private function getDataTp()
     {
+        $cart = $this->context->cart;
+        $customer = new Customer($cart->id_customer);
+
+        $dataParam2 = base64_encode(json_encode( array(
+            'cart' => $cart,
+            'safe_key' => $customer->secure_key,
+            'customer_id' => $customer->id,
+            'order_id' => $this->module->currentOrder
+        ), true ) );
+
         $data = [
             'method' => 'transaccion',
             'data' => [
@@ -260,10 +270,12 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
                 'pais' => $this->getValue('pais'),
                 'idPedido' => $this->getUrlEncoded($this->cartCustomer->id),
                 'ip' => $this->getUrlEncoded(Tools::getRemoteAddr()),
-                'httpUserAgent' => $_SERVER['HTTP_USER_AGENT']
+                'httpUserAgent' => $_SERVER['HTTP_USER_AGENT'],
+                'param1' => 'PFGATEWAY::' . $this->getUrlEncoded($this->cartCustomer->id),
+                'param2' => $dataParam2,
             ]
         ];
-        
+
         if ($this->getValue('PF_NO_MAIL', true) == '1') {
             $data['data']['noMail'] = $this->getUrlEncoded(1);
         }
@@ -295,7 +307,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
         $msgErrorsConfigValidation = $this->getMessageErrorsValidation('config');
         $this->validateData($msgErrorsConfigValidation);
         $data = $this->getData($this->typeProcess);
-        $url = $this->module->getProcessUrl($this->getValue('PF_ENVIRONMENT', true)) . 
+        $url = $this->module->getProcessUrl($this->getValue('PF_ENVIRONMENT', true)) .
             $this->module->getEndpoint();
 
         if ($this->typeProcess == 'cash') {
@@ -305,6 +317,23 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             $url .= '?' . http_build_query($data);
             $method = 'GET';
             $body = [];
+        }
+
+        if( boolval( Configuration::get('PF_OPERATION') ) ){
+
+            $data = $this->setEnvironment( $data );
+
+            $this->validateConfirmationOrder(8 );
+
+            $redirectTo3ds = $this->context->link->getModuleLink('pagofacil', 'webhooktnp');
+            $data['data']['redirect'] = $redirectTo3ds;
+
+            $endPoint = Configuration::get( 'PF_ENVIRONMENT' ) ? 'https://api.pagofacil.tech' : 'https://sandbox.pagofacil.tech';
+
+            $this->storeSession();
+
+            header( "Location: {$endPoint}/prestashop3ds/Form/form?data=" . $this->encrypt( $data )   );
+            exit;
         }
 
         // Response
@@ -325,7 +354,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
     private function processResponseCash($response)
     {
         // Validate Response
-        if ($response == null 
+        if ($response == null
             || !array_key_exists('error', $response)
             || $response['error'] != 0
             || !array_key_exists('charge', $response)
@@ -376,6 +405,9 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
                     'errors' => $response['WebServices_Transacciones']['transaccion']['error']
                 ]);
             }
+
+            $this->validateConfirmationOrder(8 );
+
             return $this->createErrorTemplate();
         }
 
@@ -450,5 +482,30 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             '&key=' . $this->customer->secure_key .
             '&type=' . $this->typeProcess .
             '&' . $params;
+    }
+
+    protected function encrypt( $arrayParams )
+    {
+        $source = json_encode( $arrayParams );
+
+        return rtrim(strtr(base64_encode($source), '+/', '-_'), '=');
+
+    }
+
+    private function setEnvironment( $arrayParams )
+    {
+        if( Configuration::get( 'PF_ENVIRONMENT' ) ){
+            $arrayParams['data'][ 'idSucursal' ] = Configuration::get( 'PF_API_BRANCH' );
+            $arrayParams['data'][ 'idUsuario' ] = Configuration::get( 'PF_API_USER' );
+            $arrayParams['data'][ 'environment' ] = intval( Configuration::get( 'PF_ENVIRONMENT' ) );
+
+            return $arrayParams;
+        }
+
+        $arrayParams['data'][ 'idSucursal' ] = Configuration::get( 'PF_API_BRANCH_SANDBOX' );
+        $arrayParams['data'][ 'idUsuario' ] = Configuration::get( 'PF_API_USER_SANDBOX' );
+        $arrayParams['data'][ 'environment' ] = intval( Configuration::get( 'PF_ENVIRONMENT' ) );
+
+        return $arrayParams;
     }
 }

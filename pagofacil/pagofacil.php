@@ -119,13 +119,18 @@ class Pagofacil extends PaymentModule
      */
     public function uninstall()
     {
-        if (!Configuration::deleteByName('PF_API_USER')
+        if (   !Configuration::deleteByName('PF_API_USER')
             || !Configuration::deleteByName('PF_API_BRANCH')
+            || !Configuration::deleteByName('PF_API_USER_SANDBOX')
+            || !Configuration::deleteByName('PF_API_BRANCH_SANDBOX')
             || !Configuration::deleteByName('PF_ENVIRONMENT')
             || !Configuration::deleteByName('PF_NO_MAIL')
             || !Configuration::deleteByName('PF_EXCHANGE')
             || !Configuration::deleteByName('PF_INSTALLMENTS')
             || !Configuration::deleteByName('PF_CONCEPTO')
+            || !Configuration::deleteByName('PF_OPERATION')
+            || !Configuration::deleteByName('PF_CIPHER_KEY')
+            || !Configuration::deleteByName('PF_CASH_PAYMENT')
             || !parent::uninstall()
         ) {
             return false;
@@ -147,10 +152,16 @@ class Pagofacil extends PaymentModule
         $this->cartCustomer = $params['cart'];
         $this->client = $params['cookie'];
 
-        return [
+        $paymentMethods = array(
             $this->getPagoFacilPyamentOption(),
-            $this->getPagoFacilCashPaymentOption()
-        ];
+        );
+
+        if( Configuration::get( 'PF_CASH_PAYMENT' ) ) {
+            $paymentMethods[] = $this->getPagoFacilCashPaymentOption();
+        }
+
+
+        return $paymentMethods;
     }
 
     /**
@@ -219,8 +230,8 @@ class Pagofacil extends PaymentModule
                 'errors' => $this->getValidationErrors(),
                 'installments' => (boolean) Configuration::get('PF_INSTALLMENTS'),
                 'action' => $this->context->link->getModuleLink(
-                    $this->name, 
-                    'validation', 
+                    $this->name,
+                    'validation',
                     ['type' => 'tp'],
                     true
                 )
@@ -251,7 +262,7 @@ class Pagofacil extends PaymentModule
                 'stores' => $this->getConvenienceStores(),
                 'errors' => $this->getValidationErrors(),
                 'action' => $this->context->link->getModuleLink(
-                    $this->name, 
+                    $this->name,
                     'validation',
                     ['type' => 'cash'],
                     true
@@ -366,7 +377,7 @@ class Pagofacil extends PaymentModule
 
         return $this->fetch('module:pagofacil/views/templates/front/payment_return.tpl');
     }
-    
+
     /**
      * Get Content to Update Config
      * @return html Content
@@ -461,20 +472,42 @@ class Pagofacil extends PaymentModule
                 [
                     'type' => 'text',
                     'class' => 'input-sm form-control',
-                    'label' => 'API Key Usuario',
+                    'label' => 'API Key Usuario (Producción)',
                     'name' => 'PF_API_USER',
                     'size' => 60,
                     'required' => true
                 ], [
                     'type' => 'text',
                     'class' => 'input-sm form-control',
-                    'label' => 'API Key Sucursal',
+                    'label' => 'API Key Sucursal (Producción)',
                     'name' => 'PF_API_BRANCH',
                     'size' => 60,
                     'required' => true
+                ],[
+                    'type' => 'text',
+                    'class' => 'input-sm form-control',
+                    'label' => 'API Key Usuario (Sandbox)',
+                    'name' => 'PF_API_USER_SANDBOX',
+                    'size' => 60,
+                    'required' => false
+                ], [
+                    'type' => 'text',
+                    'class' => 'input-sm form-control',
+                    'label' => 'API Key Sucursal (Sandbox)',
+                    'name' => 'PF_API_BRANCH_SANDBOX',
+                    'size' => 60,
+                    'required' => false
+                ], [
+                    'type' => 'text',
+                    'class' => 'input-sm form-control',
+                    'label' => 'Llave de cifrado',
+                    'name' => 'PF_CIPHER_KEY',
+                    'size' => 100,
+                    'required' => true,
+                    'desc' => 'Llave de cifrado para desencriptar la respuesta de 3ds.',
                 ], [
                     'type' => 'select',
-                    'label' => 'Environment',
+                    'label' => 'Ambiente',
                     'name' => 'PF_ENVIRONMENT',
                     'desc' => 'Stage/Production environments',
                     'required' => true,
@@ -485,7 +518,7 @@ class Pagofacil extends PaymentModule
                                 'name' => 'Stage/Sandbox/Test'
                             ], [
                                 'id_option' => 1,
-                                'name' => 'Production'
+                                'name' => 'Producción'
                             ]
                         ],
                         'id' => 'id_option',
@@ -532,6 +565,44 @@ class Pagofacil extends PaymentModule
                     'name' => 'PF_CONCEPTO',
                     'size' => 60,
                     'required' => true
+                ],[
+                    'type' => 'select',
+                    'label' => 'Operación',
+                    'name' => 'PF_OPERATION',
+                    'desc' => 'Método por el que se van a procesar los pagos',
+                    'required' => true,
+                    'options' => [
+                        'query' => [
+                            [
+                                'id_option' => 0,
+                                'name' => 'Api'
+                            ], [
+                                'id_option' => 1,
+                                'name' => '3DS'
+                            ]
+                        ],
+                        'id' => 'id_option',
+                        'name' => 'name'
+                    ]
+                ], [
+                    'type' => 'select',
+                    'label' => 'Activar pagos en efectivo',
+                    'name' => 'PF_CASH_PAYMENT',
+                    'desc' => 'Mostrar la opción de pagos en efectivo como un método de pago.',
+                    'required' => true,
+                    'options' => [
+                        'query' => [
+                            [
+                                'id_option' => 0,
+                                'name' => 'No'
+                            ], [
+                                'id_option' => 1,
+                                'name' => 'Si'
+                            ]
+                        ],
+                        'id' => 'id_option',
+                        'name' => 'name'
+                    ]
                 ]
             ],
             'submit' => [
@@ -549,19 +620,31 @@ class Pagofacil extends PaymentModule
     {
         $apiUser = $this->getValueConfig('PF_API_USER');
         $apiBranch = $this->getValueConfig('PF_API_BRANCH');
+        $apiUserSandbox = $this->getValueConfig('PF_API_USER_SANDBOX');
+        $apiBranchSandbox = $this->getValueConfig('PF_API_BRANCH_SANDBOX');
         $environment = $this->getValueConfig('PF_ENVIRONMENT');
         $noMail = $this->getValueConfig('PF_NO_MAIL');
         $exchange = $this->getValueConfig('PF_EXCHANGE');
         $installments = $this->getValueConfig('PF_INSTALLMENTS');
         $concept = $this->getValueConfig('PF_CONCEPTO');
+        $typeOperation = $this->getValueConfig('PF_OPERATION');
+        $cipherKey = $this->getValueConfig('PF_CIPHER_KEY');
+        $cashPayment = $this->getValueConfig('PF_CASH_PAYMENT');
+
+        #var_dump( $cipherKey );exit;
 
         Configuration::updateValue('PF_API_USER', $apiUser);
         Configuration::updateValue('PF_API_BRANCH', $apiBranch);
+        Configuration::updateValue('PF_API_USER_SANDBOX', $apiUserSandbox);
+        Configuration::updateValue('PF_API_BRANCH_SANDBOX', $apiBranchSandbox);
         Configuration::updateValue('PF_ENVIRONMENT', $environment);
         Configuration::updateValue('PF_NO_MAIL', $noMail);
         Configuration::updateValue('PF_EXCHANGE', $exchange);
         Configuration::updateValue('PF_INSTALLMENTS', $installments);
         Configuration::updateValue('PF_CONCEPTO', $concept);
+        Configuration::updateValue('PF_OPERATION', $typeOperation);
+        Configuration::updateValue('PF_CIPHER_KEY', $cipherKey);
+        Configuration::updateValue('PF_CASH_PAYMENT', $cashPayment);
     }
 
     /**
@@ -573,11 +656,16 @@ class Pagofacil extends PaymentModule
         return [
             'PF_API_BRANCH' => Configuration::get('PF_API_BRANCH'),
             'PF_API_USER' => Configuration::get('PF_API_USER'),
+            'PF_API_BRANCH_SANDBOX' => Configuration::get('PF_API_BRANCH_SANDBOX'),
+            'PF_API_USER_SANDBOX' => Configuration::get('PF_API_USER_SANDBOX'),
             'PF_ENVIRONMENT' => Configuration::get('PF_ENVIRONMENT'),
             'PF_NO_MAIL' => Configuration::get('PF_NO_MAIL'),
             'PF_EXCHANGE' => Configuration::get('PF_EXCHANGE'),
             'PF_INSTALLMENTS' => Configuration::get('PF_INSTALLMENTS'),
-            'PF_CONCEPTO' => Configuration::get('PF_CONCEPTO')
+            'PF_CONCEPTO' => Configuration::get('PF_CONCEPTO'),
+            'PF_OPERATION' => Configuration::get('PF_OPERATION'),
+            'PF_CIPHER_KEY' => Configuration::get('PF_CIPHER_KEY'),
+            'PF_CASH_PAYMENT' => Configuration::get('PF_CASH_PAYMENT'),
         ];
     }
 
