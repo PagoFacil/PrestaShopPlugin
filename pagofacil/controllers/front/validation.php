@@ -330,8 +330,6 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
 
             $endPoint = Configuration::get( 'PF_ENVIRONMENT' ) ? 'https://api.pagofacil.tech' : 'https://sandbox.pagofacil.tech';
 
-            $this->storeSession();
-
             header( "Location: {$endPoint}/prestashop3ds/Form/form?data=" . $this->encrypt( $data )   );
             exit;
         }
