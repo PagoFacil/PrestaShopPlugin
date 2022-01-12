@@ -77,7 +77,7 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
 
         define('SLACK_WEBHOOK', 'https://hooks.slack.com/services/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');
 
-        $message = array('payload' => json_encode(array('text'=> json_encode( array( 'PRESTASHOP-3ds' => 'TEST', 'class' => __CLASS__, 'method' => __FUNCTION__, "urlRedirect" => $urlRedirection )))));
+        $message = array('payload' => json_encode(array('text'=> json_encode( array( 'PRESTASHOP-3ds' => 'TEST', 'class' => __CLASS__, 'method' => __FUNCTION__, "urlRedirect" => $urlRedirection, "responseDecrypt" => $responseDecrypt )))));
         $c = curl_init(SLACK_WEBHOOK);
         curl_setopt($c, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($c, CURLOPT_POST, true);
