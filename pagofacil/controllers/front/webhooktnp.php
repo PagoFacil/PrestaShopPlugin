@@ -38,6 +38,7 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
      */
     protected function executeWebhook()
     {
+
         $response = Tools::getValue( 'response' );
         $responseDecrypt = $this->decryptResponse( $response );
         $authorized = isset( $responseDecrypt['autorizado'] ) ? $responseDecrypt['autorizado'] : false;
@@ -46,10 +47,14 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
         $cartSession = $this->findCartSession( $encryptData );
         $order = Order::getByCartId( $cartSession['id'] );
 
+        $customer = new Customer( (int) $cartSession['id_customer'] );
+        $cart = new Cart( $cartSession['id'] );
+
+
         if ( !boolval( $authorized ) ) {
             $this->getErrorUnknown();
 
-            $this->failPayment( $order->id, $cartSession['id_customer'] );
+            $this->restoreCartPayment( $order->id, $cartSession['id_customer'] );
 
             $this->context->smarty->assign([
                 'errors' => isset( $responseDecrypt['error'] ) ? $responseDecrypt['error'] : 'Generic error'
@@ -59,8 +64,10 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
         }
         /**/
 
+        $this->updateCustomerSession( $customer );
+
         $secureKey = $cartSession['secure_key'];
-        #var_dump( $secureKey, $cartSession ); exit;
+
 
         $orderHistory = new OrderHistory();
         $orderHistory->id_order = (int) $order->id;
@@ -75,18 +82,57 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
             'status' => 'success',
         ]);
 
-        define('SLACK_WEBHOOK', 'https://hooks.slack.com/services/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');
 
-        $message = array('payload' => json_encode(array('text'=> json_encode( array( 'PRESTASHOP-3ds' => 'TEST', 'class' => __CLASS__, 'method' => __FUNCTION__, "urlRedirect" => $urlRedirection, "responseDecrypt" => $responseDecrypt )))));
-        $c = curl_init(SLACK_WEBHOOK);
-        curl_setopt($c, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($c, CURLOPT_POST, true);
-        curl_setopt($c, CURLOPT_POSTFIELDS, $message);
-        curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
-        $output = curl_exec($c);
-        curl_close($c);
+        $this->context->cookie->id_cart = $cartSession['id'];
+        $this->context->cookie->write();
+
+
 
         Tools::redirect($urlRedirection);
+
+    }
+
+    private function updateCustomerSession( $customer )
+    {
+        $this->context->customer = $customer;
+        $this->context->cookie->id_customer = (int) $customer->id;
+        $this->context->cookie->customer_lastname = $customer->lastname;
+        $this->context->cookie->customer_firstname = $customer->firstname;
+        $this->context->cookie->passwd = $customer->passwd;
+        $this->context->cookie->logged = 1;
+        $customer->logged = 1;
+        $this->context->cookie->email = $customer->email;
+        $this->context->cookie->is_guest = $customer->isGuest();
+
+
+        /*
+
+        if (Configuration::get('PS_CART_FOLLOWING') && (empty($this->context->cookie->id_cart) || Cart::getNbProducts($this->context->cookie->id_cart) == 0) && $idCart = (int) Cart::lastNoneOrderedCart($this->customer->id)) {
+            $this->cart = new Cart($idCart);
+        } else {
+            $idCarrier = (int) $this->cart->id_carrier;
+            $this->cart->id_carrier = 0;
+            $this->cart->setDeliveryOption(null);
+            $this->cart->updateAddressId($this->cart->id_address_delivery, (int) Address::getFirstCustomerAddressId((int) ($customer->id)));
+            $this->cart->id_address_delivery = (int) Address::getFirstCustomerAddressId((int) ($customer->id));
+            $this->cart->id_address_invoice = (int) Address::getFirstCustomerAddressId((int) ($customer->id));
+        }
+        $this->cart->id_customer = (int) $customer->id;
+
+        if (isset($idCarrier) && $idCarrier) {
+            $deliveryOption = [$this->cart->id_address_delivery => $idCarrier . ','];
+            $this->cart->setDeliveryOption($deliveryOption);
+        }
+
+        $this->cart->save();
+        $this->context->cookie->id_cart = (int) $this->cart->id;
+        $this->cart->autosetProductAddress();
+        */
+
+        $this->context->cookie->write();
+
+        $this->context->cookie->registerSession(new CustomerSession());
+
 
     }
 
@@ -184,7 +230,7 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
 
     }
 
-    private function failPayment( $orderId, $customerId )
+    private function restoreCartPayment( $orderId, $customerId )
     {
         $oldCart = new Cart(Order::getCartIdStatic( $orderId, $customerId ) );
         $duplication = $oldCart->duplicate();
