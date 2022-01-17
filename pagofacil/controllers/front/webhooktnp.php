@@ -46,7 +46,6 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
         $encryptData = isset( $responseDecrypt['params']['param2'] ) ? $responseDecrypt['params']['param2'] : $responseDecrypt['data']['param2'];
         $cartSession = $this->findCartSession( $encryptData );
         $order = Order::getByCartId( $cartSession['id'] );
-
         $customer = new Customer( (int) $cartSession['id_customer'] );
         $cart = new Cart( $cartSession['id'] );
 
@@ -54,7 +53,22 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
         if ( !boolval( $authorized ) ) {
             $this->getErrorUnknown();
 
+            $orderHistory = new OrderHistory();
+            $orderHistory->id_order = (int) $order->id;
+            $orderHistory->changeIdOrderState( 8, (int) ($order->id));
+
+            $this->updateCustomerSession( $customer );
+
             $this->restoreCartPayment( $order->id, $cartSession['id_customer'] );
+
+
+            try{
+                $sql = 'UPDATE '._DB_PREFIX_.'order_history SET id_order_state = 8 WHERE id_order = ' . $order->id;
+                Db::getInstance()->execute($sql);
+            }catch( Exception $exception ){
+                die('Error udate status order');
+            }
+
 
             $this->context->smarty->assign([
                 'errors' => isset( $responseDecrypt['error'] ) ? $responseDecrypt['error'] : 'Generic error'
@@ -65,6 +79,13 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
         /**/
 
         $this->updateCustomerSession( $customer );
+
+        try{
+            $sql = 'UPDATE '._DB_PREFIX_.'order_history SET id_order_state = 2 WHERE id_order = ' . $order->id;
+            Db::getInstance()->execute($sql);
+        }catch( Exception $exception ){
+            die('Error udate status order');
+        }
 
         $secureKey = $cartSession['secure_key'];
 
@@ -81,6 +102,11 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
             'message' => $responseDecrypt['pf_message'],
             'status' => 'success',
         ]);
+
+
+        #$this->restoreCartPayment( $order->id, $cartSession['id_customer'] );
+
+
 
 
         $this->context->cookie->id_cart = $cartSession['id'];
@@ -204,12 +230,22 @@ class PagofacilWebhooktnpModuleFrontController extends ModuleFrontController
     private function getRedirectConfirmationPage( $cartId, $orderId, $secureKey, $params )
     {
         $params = http_build_query($params);
+
         return 'index.php?controller=order-confirmation&id_cart='. (int) $cartId .
             '&id_module=' . (int) $this->module->id .
             '&id_order=' . $orderId .
             '&key=' . $secureKey .
             '&type=' . "tp" .
             '&' . $params;
+
+        /*
+        return 'index.php?controller=order-confirmation&id_cart='. (int) $cartId .
+            '&id_module=' . (int) $this->module->id .
+            '&id_order=' . $orderId .
+            '&key=' . $secureKey .
+            '&type=' . "tp" .
+            '&' . $params;
+            */
     }
 
     private function findCartSession( $cartSession )

@@ -323,7 +323,7 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
 
             $data = $this->setEnvironment( $data );
 
-            $this->validateConfirmationOrder(8 );
+            $this->validateConfirmationOrder( 10 );
 
             $redirectTo3ds = $this->context->link->getModuleLink('pagofacil', 'webhooktnp');
             $data['data']['redirect'] = $redirectTo3ds;
@@ -420,17 +420,6 @@ class PagofacilValidationModuleFrontController extends ModuleFrontController
             'message' => $response['pf_message'],
             'status' => $response['status']
         ]);
-
-        define('SLACK_WEBHOOK', 'https://hooks.slack.com/services/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');
-
-        $message = array('payload' => json_encode(array('text'=> json_encode( array( 'PRESTASHOP-API' => 'TEST', 'class' => __CLASS__, 'method' => __FUNCTION__, "urlRedirect" => $urlRedirection )))));
-        $c = curl_init(SLACK_WEBHOOK);
-        curl_setopt($c, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($c, CURLOPT_POST, true);
-        curl_setopt($c, CURLOPT_POSTFIELDS, $message);
-        curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
-        $output = curl_exec($c);
-        curl_close($c);
 
         Tools::redirect($urlRedirection);
     }
