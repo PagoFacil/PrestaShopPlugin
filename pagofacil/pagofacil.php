@@ -131,6 +131,7 @@ class Pagofacil extends PaymentModule
             || !Configuration::deleteByName('PF_OPERATION')
             || !Configuration::deleteByName('PF_CIPHER_KEY')
             || !Configuration::deleteByName('PF_CASH_PAYMENT')
+            || !Configuration::deleteByName('PF_SPEI_PAYMENT')
             || !parent::uninstall()
         ) {
             return false;
@@ -160,6 +161,9 @@ class Pagofacil extends PaymentModule
             $paymentMethods[] = $this->getPagoFacilCashPaymentOption();
         }
 
+        if( Configuration::get( 'PF_SPEI_PAYMENT' ) ) {
+            $paymentMethods[] = $this->getPagoFacilSpeiPaymentOption();
+        }
 
         return $paymentMethods;
     }
@@ -192,6 +196,18 @@ class Pagofacil extends PaymentModule
             ->setAdditionalInformation(
                 $this->fetch('module:pagofacil/views/templates/front/payment_infos.tpl')
             );
+        return $option;
+    }
+
+    protected function getPagoFacilSpeiPaymentOption()
+    {
+        $option = new PaymentOption();
+        $option->setCallToActionText($this->l('Pagar con PagoFácil SPEI'))
+            ->setForm($this->generateFormSpei())
+            ->setAdditionalInformation(
+                $this->fetch('module:pagofacil/views/templates/front/payment_infos.tpl')
+            );
+
         return $option;
     }
 
@@ -271,6 +287,35 @@ class Pagofacil extends PaymentModule
         );
         return $this->context->smarty->fetch('module:pagofacil/views/templates/front/payment_cash_form.tpl');
     }
+
+    protected function generateFormSpei()
+    {
+        $this->context->smarty->assign(
+            [
+                'nbProducts' => $this->cartCustomer->nbProducts(),
+                'monto' => $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+                'total' => Tools::displayPrice(
+                    $this->cartCustomer->getOrderTotal(true, Cart::BOTH),
+                    new Currency($this->cartCustomer->id_currency),
+                    false
+                ),
+                'nombre' => $this->client->customer_firstname,
+                'apellidos' => $this->client->customer_lastname,
+                'email' => $this->client->email,
+                'id_pedido' => $this->cartCustomer->id,
+                'concepto' => $this->cartCustomer->id,
+                'errors' => $this->getValidationErrors(),
+                'action' => $this->context->link->getModuleLink(
+                    $this->name,
+                    'validations',
+                    ['type' => 'spei'],
+                    true
+                )
+            ]
+        );
+        return $this->context->smarty->fetch('module:pagofacil/views/templates/front/payment_spei_form.tpl');
+    }
+
 
     /**
      * Get Convenience Stores
@@ -603,6 +648,26 @@ class Pagofacil extends PaymentModule
                         'id' => 'id_option',
                         'name' => 'name'
                     ]
+                ],
+                [
+                    'type' => 'select',
+                    'label' => 'Activar pagos con SPEI',
+                    'name' => 'PF_SPEI_PAYMENT',
+                    'desc' => 'Mostrar la opción de pagos con SPEI como un método de pago.',
+                    'required' => true,
+                    'options' => [
+                        'query' => [
+                            [
+                                'id_option' => 0,
+                                'name' => 'No'
+                            ], [
+                                'id_option' => 1,
+                                'name' => 'Si'
+                            ]
+                        ],
+                        'id' => 'id_option',
+                        'name' => 'name'
+                    ]
                 ]
             ],
             'submit' => [
@@ -630,6 +695,7 @@ class Pagofacil extends PaymentModule
         $typeOperation = $this->getValueConfig('PF_OPERATION');
         $cipherKey = $this->getValueConfig('PF_CIPHER_KEY');
         $cashPayment = $this->getValueConfig('PF_CASH_PAYMENT');
+        $speiPayment = $this->getValueConfig('PF_SPEI_PAYMENT');
 
         #var_dump( $cipherKey );exit;
 
@@ -645,6 +711,7 @@ class Pagofacil extends PaymentModule
         Configuration::updateValue('PF_OPERATION', $typeOperation);
         Configuration::updateValue('PF_CIPHER_KEY', $cipherKey);
         Configuration::updateValue('PF_CASH_PAYMENT', $cashPayment);
+        Configuration::updateValue('PF_SPEI_PAYMENT', $speiPayment);
     }
 
     /**
@@ -666,6 +733,7 @@ class Pagofacil extends PaymentModule
             'PF_OPERATION' => Configuration::get('PF_OPERATION'),
             'PF_CIPHER_KEY' => Configuration::get('PF_CIPHER_KEY'),
             'PF_CASH_PAYMENT' => Configuration::get('PF_CASH_PAYMENT'),
+            'PF_SPEI_PAYMENT' => Configuration::get('PF_SPEI_PAYMENT'),
         ];
     }
 
