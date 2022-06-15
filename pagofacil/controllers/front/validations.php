@@ -222,9 +222,9 @@ class PagofacilValidationsModuleFrontController extends ModuleFrontController
         $this->authorize();
         $this->customer = new Customer($this->cartCustomer->id_customer);
         $this->validateLoadedObject($this->customer);
-        $msgErrorsInputValidation = $this->getMessageErrorsValidation($this->typeProcess);
-        $msgErrorsConfigValidation = $this->getMessageErrorsValidation('config');
-        $this->validateData($msgErrorsConfigValidation);
+        //$msgErrorsInputValidation = $this->getMessageErrorsValidation($this->typeProcess);
+        //$msgErrorsConfigValidation = $this->getMessageErrorsValidation('config');
+        //$this->validateData($msgErrorsConfigValidation);
         $data = $this->getData($this->typeProcess);
         $url =  $this->module->getEndpoint();
 
@@ -235,7 +235,7 @@ class PagofacilValidationsModuleFrontController extends ModuleFrontController
 
         // Response
         $response = $this->module->executeCurl($url, $method, $body);
-        $this->validateData($response, false);
+        //$this->validateData($response, false);
         $response = $this->module->decode($response);
 
         //Webhook
@@ -263,7 +263,7 @@ class PagofacilValidationsModuleFrontController extends ModuleFrontController
             || $response['errors'] != ''
         ) {
             // Show Errors
-            $this->getErrorUnknown();
+            $this->getErrorUnknown($response['errors']);
             return $this->createErrorTemplate();
         }
         // Confirm Order
@@ -282,11 +282,12 @@ class PagofacilValidationsModuleFrontController extends ModuleFrontController
      * Get Text to Unknown Error
      * @return SmartyVars Errors
      */
-    private function getErrorUnknown()
+    private function getErrorUnknown($response)
     {
         $this->context->smarty->assign([
             'params' => [
                 'error' => 'Ocurrió un error al procesar su pago, intente más tarde.',
+                'errors' => $response,
                 'link' => $this->context->link->getPageLink('order') . '?step=4'
             ]
         ]);
@@ -298,7 +299,7 @@ class PagofacilValidationsModuleFrontController extends ModuleFrontController
      */
     private function createErrorTemplate()
     {
-        return $this->setTemplate('module:pagofacil/views/templates/front/payment_error.tpl');
+        return $this->setTemplate('module:pagofacil/views/templates/front/payment_errors.tpl');
     }
 
     /**
