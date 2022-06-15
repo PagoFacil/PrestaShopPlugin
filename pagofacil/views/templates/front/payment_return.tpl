@@ -126,4 +126,47 @@
         </div>
     </div>
     {/if}
+    {if $type == 'spei'}
+    <div class="col-md-12">
+        <div class="panel panel-default">
+            <div class="panel-title">
+                <h3>¡Felicitaciones! Su pedido ha sido generado correctamente, verifica en tu e-mail donde se enviaron las instrucciones para realizar tu pago. O también lo puedes realizar con las siguientes instrucciones.</h3>
+                <hr>
+            </div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <p>
+                            <strong>
+                                <i>Seguir los siguientes pasos:</i>
+                            </strong>
+                        </p>
+                    </div>
+                </div>
+                <hr>
+                <ol>
+                    <li>
+                        <p>Ingresa desde su banca móvil o web para proceda a realizar el pago.</p>
+                    </li>
+                    <li>
+                        <p>Utiliza la cuenta clabe: <strong>{$cuenta_clabe}</strong> </p>
+                    </li>
+                     <li>
+                        <p>Deposita la cantidad EXACTA:<strong> ${$monto}</strong></p>
+                    </li>
+                </ol>
+                <hr>
+                <div class="alert alert-info">
+                    <ul style="list-style-type:disc; padding-left: 5%;">
+                        <li>El numero de cuenta clabe: <strong>{$cuenta_clabe}</strong></li>
+                        <li>Deposita la cantidad EXACTA: <strong>${$monto}</strong></li>
+                    </ul>
+                    </h4>
+                         <li><strong> <b>Al confirmar tu pago el banco te entregará un recibo, revísalo para asegurarte que la transacción se realizó. Al finalizar los pasos, recibirás un correo de confirmando tu pago.</b></strong></li>
+                    </h4>
+                </div>
+            </div>
+        </div>
+    </div>
+    {/if}
 </div>
